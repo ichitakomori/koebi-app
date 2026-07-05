@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<!-- PWAアイコン生成用ページ（shrimp.js と同一ソースからアイコンを作る）
+     使い方：ヘッドレスブラウザで ?maskable=1 有無それぞれをスクショ -->
+<html>
+<head><meta charset="UTF-8">
+<style>
+  body{margin:0}
+  #tile{width:512px;height:512px;background:#eaf6f1;position:relative;overflow:hidden}
+  #tile.rounded{border-radius:100px}
+  svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-54%)}
+  .bubble{position:absolute;border-radius:50%;background:#d5ebe3}
+</style>
+</head>
+<body>
+<div id="tile">
+  <div class="bubble" style="width:34px;height:34px;left:70px;top:88px"></div>
+  <div class="bubble" style="width:22px;height:22px;left:412px;top:70px"></div>
+  <div class="bubble" style="width:26px;height:26px;left:400px;top:400px"></div>
+  <svg id="s" viewBox="0 0 200 170" width="420" height="357"></svg>
+</div>
+<script src="shrimp.js"></script>
+<script>
+  const maskable = new URLSearchParams(location.search).get("maskable") === "1";
+  const tile = document.getElementById("tile");
+  if(!maskable) tile.classList.add("rounded");
+  const svg = document.getElementById("s");
+  if(maskable){ svg.setAttribute("width","360"); svg.setAttribute("height","306"); }
+  svg.innerHTML = koebiShrimpMarkup(4, {shadow:false});
+</script>
+</body>
+</html>

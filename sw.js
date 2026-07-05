@@ -1,9 +1,11 @@
 /* Koebi service worker — アプリの殻をキャッシュしてオフラインでも開けるようにする */
-const CACHE = "koebi-v0.1.0";
+const CACHE = "koebi-v0.3.0";
 const ASSETS = [
   "./",
   "./index.html",
+  "./shrimp.js",
   "./manifest.webmanifest",
+  "./icons/shrimp.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon-maskable-512.png"
