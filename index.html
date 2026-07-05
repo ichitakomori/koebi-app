@@ -290,6 +290,16 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
     <p class="care-note">連続記録は数えません。記録した日の合計だけで育ちます。<br>休んでも減りません。</p>
   </div>
   <div class="card">
+    <h2>設定</h2>
+    <p class="hint" style="margin-bottom:4px">音声入力・文字起こしの言語</p>
+    <div class="chips" id="langChips" style="margin:8px 0 4px">
+      <button class="chip" data-l="auto">自動</button>
+      <button class="chip" data-l="ja">日本語</button>
+      <button class="chip" data-l="en">English</button>
+    </div>
+    <p class="hint" style="margin:8px 0 0">自動＝端末の言語設定に合わせます。発話ごとの自動判別は端末の音声認識が対応していないため、英語で話す日は English に切り替えてください。</p>
+  </div>
+  <div class="card">
     <h2>書き出し</h2>
     <p class="hint">記録全体を Markdown で書き出せます（Obsidian にそのまま置ける形式）。</p>
     <button class="exp-btn" id="exportMd">📄 Markdown で書き出す</button>
@@ -401,21 +411,46 @@ $$("nav button").forEach(b=>{
 
 /* ---------- 音声認識ヘルパー ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-function makeRecognizer(onText, onEnd){
+
+/* 言語設定：auto = 端末の言語に合わせる（発話ごとの自動判別は端末認識が非対応） */
+function getLangPref(){ return localStorage.getItem("koebi.lang") || "auto"; }
+function resolveLang(){
+  const p = getLangPref();
+  if(p === "ja") return "ja-JP";
+  if(p === "en") return "en-US";
+  return (navigator.language || "ja").toLowerCase().startsWith("en") ? "en-US" : "ja-JP";
+}
+
+function makeRecognizer(onText, onEnd, opts){
   if(!SR) return null;
+  opts = opts || {};
   const r = new SR();
-  r.lang = "ja-JP"; r.continuous = true; r.interimResults = true;
-  let finalText = "";
+  r.lang = opts.lang || resolveLang();
+  r.continuous = true;
+  r.interimResults = true;
+  let committed = "";     // 終了済みセッションの確定分
+  let sessionFinal = "";  // 現セッションの確定分
   r.onresult = e=>{
-    let interim = "";
-    for(let i=e.resultIndex;i<e.results.length;i++){
+    // Android は確定結果を重複発火することがあるため、
+    // イベントごとに results 全体から組み立て直す（冪等 → 二重入力しない）
+    let fin = "", interim = "";
+    for(let i = 0; i < e.results.length; i++){
       const t = e.results[i][0].transcript;
-      if(e.results[i].isFinal) finalText += t; else interim += t;
+      if(e.results[i].isFinal) fin += t; else interim += t;
     }
-    onText(finalText, interim);
+    sessionFinal = fin;
+    onText(committed + fin, interim);
   };
-  r.onend = ()=>{ if(onEnd) onEnd(finalText); };
-  r.onerror = ()=>{};
+  r.onerror = ev=>{ if(opts.onError) opts.onError(ev); };
+  r.onend = ()=>{
+    committed += sessionFinal;
+    sessionFinal = "";
+    // 無音などで勝手に終了しても、継続条件を満たす間は自動再開
+    if(opts.keepAlive && opts.keepAlive()){
+      try{ r.start(); return; }catch(e){}
+    }
+    if(onEnd) onEnd(committed);
+  };
   return r;
 }
 
@@ -471,7 +506,8 @@ function drawPeaks(cv, peaks, prog){
    録音（音声が主・文字起こしはベストエフォート）
    ========================================================= */
 let mediaRecorder=null, chunks=[], recStart=0, recTimer=null,
-    audioCtx=null, analyser=null, waveRaf=null, recRecog=null, recTranscript="";
+    audioCtx=null, analyser=null, waveRaf=null, recRecog=null, recTranscript="",
+    recActive=false, srFailed=false;
 
 const recBtn = $("#recBtn"), recTime = $("#recTime"),
       recState = $("#recState"), liveText = $("#liveText"),
@@ -486,6 +522,30 @@ waveBtn.addEventListener("click", ()=>{
 
 recBtn.addEventListener("click", async ()=>{
   if(mediaRecorder && mediaRecorder.state==="recording"){ stopRec(); return; }
+
+  // 1) 文字起こしを「先に」起動する（Androidのマイク競合対策：録音が先だと認識が負ける）
+  recActive = true;
+  srFailed = false;
+  recTranscript = "";
+  liveText.style.display = "block";
+  liveText.textContent = "";
+  recRecog = makeRecognizer(
+    (fin, interim)=>{ recTranscript = fin; if(!srFailed) liveText.textContent = fin + interim; },
+    null,
+    {
+      lang: resolveLang(),
+      keepAlive: ()=>recActive && !srFailed,
+      onError: ev=>{
+        if(["audio-capture","not-allowed","service-not-allowed"].includes(ev.error)){
+          srFailed = true;
+          liveText.textContent = "（この端末では録音との同時文字起こしができないようです。音声は確実に残ります。保存後に ✎ で追記できます）";
+        }
+      }
+    }
+  );
+  if(recRecog){ try{ recRecog.start(); }catch(e){} }
+  await new Promise(r=>setTimeout(r, 250)); // 認識にマイクを先に掴ませる
+
   try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
     const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
@@ -511,17 +571,11 @@ recBtn.addEventListener("click", async ()=>{
     analyser.fftSize = 128;
     src.connect(analyser);
     drawWave();
-
-    recTranscript = "";
-    liveText.style.display = "block";
-    liveText.textContent = "";
-    recRecog = makeRecognizer((fin, interim)=>{
-      recTranscript = fin;
-      liveText.textContent = fin + interim;
-    });
-    if(recRecog){ try{ recRecog.start(); }catch(e){} }
   }catch(err){
     waveTag = false;
+    recActive = false;
+    if(recRecog){ try{ recRecog.stop(); }catch(e){} }
+    liveText.style.display = "none";
     waveBtn.style.display = "";
     recState.textContent = "マイクを使用できません。権限を確認してください";
   }
@@ -550,6 +604,7 @@ function drawWave(){
 }
 
 function stopRec(){
+  recActive = false;   // keepAlive を止めてから認識を終了
   if(recTimer) clearInterval(recTimer);
   if(waveRaf) cancelAnimationFrame(waveRaf);
   if(recRecog){ try{ recRecog.stop(); }catch(e){} }
@@ -592,12 +647,18 @@ dumpText.addEventListener("input", ()=>{
 });
 
 dumpMic.addEventListener("click", ()=>{
-  if(dumpListening){ try{ dumpRecog.stop(); }catch(e){} return; }
+  if(dumpListening){
+    dumpListening = false;              // keepAlive を止めてから終了
+    try{ dumpRecog.stop(); }catch(e){}
+    dumpMic.classList.remove("listening");
+    return;
+  }
   if(!SR){ toast("この端末では音声入力を利用できません"); return; }
   const base = dumpText.value ? dumpText.value.replace(/\s+$/,"")+" " : "";
   dumpRecog = makeRecognizer(
     (fin, interim)=>{ dumpText.value = base + fin + interim; },
-    ()=>{ dumpListening = false; dumpMic.classList.remove("listening"); }
+    ()=>{ dumpListening = false; dumpMic.classList.remove("listening"); },
+    {lang: resolveLang(), keepAlive: ()=>dumpListening}
   );
   try{
     dumpRecog.start();
@@ -1160,6 +1221,17 @@ $("#exportMd").addEventListener("click", async ()=>{
   toast("書き出しました");
 });
 
+/* ---------- 設定：音声入力の言語 ---------- */
+function renderLangChips(){
+  $$("#langChips .chip").forEach(c=>c.classList.toggle("on", c.dataset.l === getLangPref()));
+}
+$("#langChips").addEventListener("click", e=>{
+  const b = e.target.closest(".chip"); if(!b) return;
+  localStorage.setItem("koebi.lang", b.dataset.l);
+  renderLangChips();
+  toast(b.dataset.l === "auto" ? "端末の言語に合わせます" : `音声入力: ${b.textContent}`);
+});
+
 /* ---------- PWA インストール ---------- */
 let deferredPrompt = null;
 window.addEventListener("beforeinstallprompt", e=>{
@@ -1180,7 +1252,7 @@ $("#installBtn").addEventListener("click", async ()=>{
   $("#todayLabel").textContent = `${now.getMonth()+1}/${now.getDate()}（${WEEK[now.getDay()]}）`;
   await openDB();
   if(navigator.storage && navigator.storage.persist){ try{ await navigator.storage.persist(); }catch(e){} }
-  renderDumps(); renderCare(); renderSlipGrid(); drawMoodChart(); renderShrimp();
+  renderDumps(); renderCare(); renderSlipGrid(); drawMoodChart(); renderShrimp(); renderLangChips();
   if("serviceWorker" in navigator){
     try{ await navigator.serviceWorker.register("sw.js"); }catch(e){}
   }
