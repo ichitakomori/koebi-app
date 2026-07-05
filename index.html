@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#eaf6f1">
+<title>Koebi こえび — 声で残す、自分だけの日記</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+:root{
+  --bg:#eaf6f1;        /* パステル海グリーン */
+  --bg2:#dff0ea;
+  --card:#ffffff;
+  --ink:#3a4a47;
+  --sub:#7a908b;
+  --shrimp:#f2a196;    /* サーモンピンク */
+  --shrimp2:#f8c3ba;
+  --sakura:#f7b8c2;
+  --accent:#5eb5a0;
+  --danger:#e08a80;
+  --shadow:0 4px 14px rgba(90,140,125,.13);
+  --radius:20px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:"Hiragino Maru Gothic ProN","BIZ UDGothic","Noto Sans JP",system-ui,sans-serif;
+  background:var(--bg); color:var(--ink);
+  min-height:100dvh; padding-bottom:calc(78px + env(safe-area-inset-bottom));
+}
+header{
+  display:flex;align-items:center;gap:10px;
+  padding:calc(14px + env(safe-area-inset-top)) 20px 8px;
+}
+header .logo{font-size:26px}
+header h1{font-size:20px;margin:0;letter-spacing:.04em}
+header .date{margin-left:auto;font-size:12px;color:var(--sub)}
+main{padding:4px 16px 16px;max-width:560px;margin:0 auto}
+.panel{display:none;animation:fade .25s ease}
+.panel.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.card{
+  background:var(--card);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:18px;margin-bottom:14px;
+}
+h2{font-size:15px;margin:0 0 6px}
+.hint{font-size:12px;color:var(--sub);line-height:1.7;margin:0 0 10px}
+button{font-family:inherit;border:none;cursor:pointer}
+
+/* ===== 録音 ===== */
+.rec-wrap{display:flex;flex-direction:column;align-items:center;padding:22px 0 10px}
+#recBtn{
+  width:132px;height:132px;border-radius:50%;
+  background:radial-gradient(circle at 32% 28%, var(--shrimp2), var(--shrimp));
+  box-shadow:0 8px 24px rgba(242,161,150,.45);
+  font-size:52px;transition:transform .15s ease;
+  display:flex;align-items:center;justify-content:center;color:#fff;
+}
+#recBtn:active{transform:scale(.94)}
+#recBtn.recording{animation:pulse 1.4s ease-in-out infinite;background:radial-gradient(circle at 32% 28%, #ffd2ca, #ef8d80)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(242,161,150,.5)}50%{box-shadow:0 0 0 22px rgba(242,161,150,0)}}
+#recTime{font-size:26px;font-variant-numeric:tabular-nums;margin:14px 0 2px;color:var(--ink)}
+#recState{font-size:13px;color:var(--sub);min-height:20px}
+#wave{width:100%;height:56px;margin-top:6px}
+#liveText{
+  width:100%;min-height:48px;font-size:14px;line-height:1.8;color:var(--ink);
+  background:var(--bg2);border-radius:14px;padding:10px 14px;margin-top:10px;
+  display:none;white-space:pre-wrap;
+}
+
+/* ===== 吐き出しBOX ===== */
+.dump-head{font-size:14px;line-height:2;background:linear-gradient(135deg,#fdf1ef,#eef8f4);border-radius:16px;padding:14px 16px;margin-bottom:12px}
+.dump-input{display:flex;gap:8px;align-items:flex-end}
+#dumpText{
+  flex:1;font-family:inherit;font-size:15px;line-height:1.7;border:none;outline:none;
+  background:var(--bg2);border-radius:14px;padding:12px 14px;min-height:52px;max-height:160px;resize:none;color:var(--ink);
+}
+.mic-sm{
+  width:52px;height:52px;border-radius:50%;font-size:22px;flex:none;
+  background:var(--shrimp);color:#fff;box-shadow:0 3px 10px rgba(242,161,150,.4);
+}
+.mic-sm.listening{animation:pulse 1.4s infinite;background:#ef8d80}
+#dumpSave{
+  width:100%;margin-top:10px;padding:14px;border-radius:16px;font-size:15px;
+  background:var(--accent);color:#fff;box-shadow:0 3px 10px rgba(94,181,160,.35);
+}
+.chips{display:flex;gap:8px;margin:14px 0 8px}
+.chip{padding:7px 14px;border-radius:999px;font-size:13px;background:#fff;color:var(--sub);box-shadow:var(--shadow)}
+.chip.on{background:var(--accent);color:#fff}
+.dump-item{display:flex;align-items:flex-start;gap:10px;padding:12px 4px;border-bottom:1px dashed #e2eee9}
+.dump-item:last-child{border-bottom:none}
+.dump-item .txt{flex:1;font-size:14px;line-height:1.7;word-break:break-word}
+.dump-item .when{font-size:11px;color:var(--sub);display:block;margin-top:2px}
+.dump-item .acts{display:flex;gap:6px;flex:none}
+.dump-item .acts button{
+  font-size:12px;padding:7px 10px;border-radius:12px;background:var(--bg2);color:var(--ink);
+}
+.dump-item.fadeout{opacity:0;transform:translateX(20px);transition:all .5s ease}
+.dump-empty{font-size:13px;color:var(--sub);text-align:center;padding:18px 0;line-height:1.9}
+
+/* ===== きろく（タイムライン） ===== */
+.day-group h3{font-size:13px;color:var(--sub);margin:16px 4px 8px;font-weight:normal}
+.tl-item{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:12px 14px;margin-bottom:8px}
+.tl-top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub)}
+.tl-top .ico{font-size:16px}
+.tl-top .del{margin-left:auto;background:none;font-size:14px;color:#c9d8d3;padding:4px}
+.tl-body{font-size:14px;line-height:1.7;margin-top:6px;word-break:break-word}
+.tl-audio{display:flex;align-items:center;gap:10px;margin-top:8px}
+.play-btn{width:40px;height:40px;border-radius:50%;background:var(--accent);color:#fff;font-size:16px;flex:none}
+.tl-dur{font-size:12px;color:var(--sub)}
+.mood-badge{display:inline-block;font-size:18px;margin-right:4px}
+
+/* ===== ケア ===== */
+.mood-row{display:flex;justify-content:space-between;margin:8px 0 4px}
+.mood-row button{
+  font-size:26px;background:var(--bg2);border-radius:14px;width:56px;height:56px;
+  filter:grayscale(.8);opacity:.65;transition:all .15s;
+}
+.mood-row button.sel{filter:none;opacity:1;background:#fdf1ef;transform:scale(1.12)}
+.mood-label{font-size:12px;color:var(--sub);margin:10px 0 0}
+#moodChart{width:100%;height:120px;margin-top:8px}
+.care-item{
+  display:flex;align-items:center;gap:12px;padding:13px 6px;
+  border-bottom:1px dashed #e2eee9;font-size:15px;
+}
+.care-item:last-child{border-bottom:none}
+.care-item .box{
+  width:28px;height:28px;border-radius:9px;background:var(--bg2);flex:none;
+  display:flex;align-items:center;justify-content:center;font-size:16px;color:transparent;
+  transition:all .15s;
+}
+.care-item.done .box{background:var(--accent);color:#fff}
+.care-item.done .lbl{color:var(--sub)}
+.care-note{font-size:12px;color:var(--sub);text-align:center;margin-top:12px;line-height:1.8}
+
+/* ===== エビ ===== */
+.shrimp-stage{display:flex;flex-direction:column;align-items:center;padding:10px 0}
+#shrimpSvg{width:200px;height:170px}
+.stage-name{font-size:17px;margin:8px 0 2px}
+.stage-sub{font-size:12px;color:var(--sub);line-height:1.9;text-align:center}
+.progress{width:100%;height:10px;background:var(--bg2);border-radius:99px;margin-top:14px;overflow:hidden}
+.progress i{display:block;height:100%;background:linear-gradient(90deg,var(--shrimp2),var(--shrimp));border-radius:99px;transition:width .6s ease}
+.exp-btn{
+  width:100%;padding:14px;border-radius:16px;font-size:14px;margin-top:8px;
+  background:var(--bg2);color:var(--ink);
+}
+#installBtn{display:none;width:100%;padding:14px;border-radius:16px;font-size:14px;margin-top:8px;background:var(--sakura);color:#fff}
+
+/* ===== タブバー ===== */
+nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:10;
+  background:rgba(255,255,255,.92);backdrop-filter:blur(10px);
+  display:flex;justify-content:space-around;
+  padding:8px 4px calc(8px + env(safe-area-inset-bottom));
+  box-shadow:0 -2px 16px rgba(90,140,125,.12);
+}
+nav button{
+  background:none;display:flex;flex-direction:column;align-items:center;gap:2px;
+  font-size:10px;color:var(--sub);width:64px;padding:4px 0;border-radius:12px;
+}
+nav button .i{font-size:22px;filter:grayscale(1);opacity:.55;transition:all .15s}
+nav button.on{color:var(--accent)}
+nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
+
+/* toast */
+#toast{
+  position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:#fff;font-size:13px;padding:10px 18px;border-radius:99px;
+  opacity:0;pointer-events:none;transition:all .3s ease;z-index:50;max-width:86vw;text-align:center;
+}
+#toast.show{opacity:.94;transform:translateX(-50%)}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">🦐</span><h1>Koebi</h1>
+  <span class="date" id="todayLabel"></span>
+</header>
+
+<main>
+
+<!-- ============ 録音 ============ -->
+<section class="panel active" id="panel-rec">
+  <div class="card">
+    <div class="rec-wrap">
+      <button id="recBtn" aria-label="録音">🎙️</button>
+      <div id="recTime">0:00</div>
+      <div id="recState">タップで録音スタート</div>
+      <canvas id="wave"></canvas>
+      <div id="liveText"></div>
+    </div>
+  </div>
+  <p class="hint" style="text-align:center">
+    声はぜんぶこのスマホの中だけに保存されるよ。<br>だれにも送られない。安心して話してね。
+  </p>
+</section>
+
+<!-- ============ 吐き出しBOX ============ -->
+<section class="panel" id="panel-dump">
+  <div class="dump-head">
+    🫧 <b>やらなきゃBOX</b><br>
+    頭の中の「やらなきゃ」、ぜんぶここに置いていっていいよ。<br>
+    整理しなくて大丈夫。出すだけでOK。
+  </div>
+  <div class="card">
+    <div class="dump-input">
+      <textarea id="dumpText" placeholder="声でもタイプでも、なんでも" rows="1"></textarea>
+      <button class="mic-sm" id="dumpMic" aria-label="声で吐き出す">🎤</button>
+    </div>
+    <button id="dumpSave">ここに置いていく</button>
+  </div>
+  <div class="chips">
+    <button class="chip on" data-f="open">いま</button>
+    <button class="chip" data-f="done">できた</button>
+    <button class="chip" data-f="released">ながした</button>
+  </div>
+  <div class="card" id="dumpList"></div>
+</section>
+
+<!-- ============ きろく ============ -->
+<section class="panel" id="panel-log">
+  <p class="hint">録音・吐き出し・きぶんの記録が、日付ごとにならぶよ。</p>
+  <div id="timeline"></div>
+</section>
+
+<!-- ============ ケア ============ -->
+<section class="panel" id="panel-care">
+  <div class="card">
+    <h2>いまのきぶん</h2>
+    <p class="mood-label">きぶん</p>
+    <div class="mood-row" id="moodRow">
+      <button data-v="-2">😞</button><button data-v="-1">😕</button><button data-v="0">😐</button><button data-v="1">🙂</button><button data-v="2">😄</button>
+    </div>
+    <p class="mood-label">エネルギー</p>
+    <div class="mood-row" id="energyRow">
+      <button data-v="0">🪫</button><button data-v="1">🔅</button><button data-v="2">🔆</button><button data-v="3">✨</button><button data-v="4">⚡</button>
+    </div>
+    <canvas id="moodChart"></canvas>
+    <p class="hint" style="text-align:center;margin-top:6px">この14日の波。高い日も低い日も、どっちもあなた。</p>
+  </div>
+  <div class="card">
+    <h2>きょうの自分ケア</h2>
+    <div id="careList"></div>
+    <p class="care-note">できた分だけで満点。<br>なにもできなかった日は、ここに来ただけで満点。</p>
+  </div>
+</section>
+
+<!-- ============ エビ ============ -->
+<section class="panel" id="panel-shrimp">
+  <div class="card">
+    <div class="shrimp-stage">
+      <svg id="shrimpSvg" viewBox="0 0 200 170"></svg>
+      <div class="stage-name" id="stageName"></div>
+      <div class="stage-sub" id="stageSub"></div>
+      <div class="progress"><i id="stageBar"></i></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>そとに出す</h2>
+    <p class="hint">きろく全体をMarkdownで書き出せるよ（Obsidianにそのまま置ける形式）。</p>
+    <button class="exp-btn" id="exportMd">📄 Markdownで書き出す</button>
+    <button id="installBtn">📲 ホーム画面に追加する</button>
+  </div>
+  <div class="card">
+    <h2>このアプリについて</h2>
+    <p class="hint">
+      Koebi（こえび）v0.1 — nomacod<br>
+      データはぜんぶこの端末の中だけ。サーバーには何も送らないよ。<br>
+      つらいときは、ひとりでかかえずに、信頼できる人や専門家にも声を。
+    </p>
+  </div>
+</section>
+
+</main>
+
+<nav>
+  <button class="on" data-p="rec"><span class="i">🎙️</span>ろくおん</button>
+  <button data-p="dump"><span class="i">🫧</span>やらなきゃ</button>
+  <button data-p="log"><span class="i">🗓️</span>きろく</button>
+  <button data-p="care"><span class="i">🩷</span>ケア</button>
+  <button data-p="shrimp"><span class="i">🦐</span>エビ</button>
+</nav>
+
+<div id="toast"></div>
+
+<script>
+/* =========================================================
+   Koebi v0.1 — すべて端末内で完結する音声日記 PWA
+   ========================================================= */
+"use strict";
+
+/* ---------- 小さな道具 ---------- */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const pad = n => String(n).padStart(2,"0");
+const dateStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const timeStr = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const fmtDur = s => `${Math.floor(s/60)}:${pad(Math.floor(s%60))}`;
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const WEEK = ["日","月","火","水","木","金","土"];
+
+function toast(msg){
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._tm);
+  t._tm = setTimeout(()=>t.classList.remove("show"), 2200);
+}
+
+/* ---------- IndexedDB ---------- */
+let db;
+function openDB(){
+  return new Promise((res,rej)=>{
+    const rq = indexedDB.open("koebi", 1);
+    rq.onupgradeneeded = e=>{
+      const d = e.target.result;
+      if(!d.objectStoreNames.contains("recordings")){
+        const st = d.createObjectStore("recordings",{keyPath:"id"});
+        st.createIndex("date","date");
+      }
+      if(!d.objectStoreNames.contains("entries")){
+        const st = d.createObjectStore("entries",{keyPath:"id"});
+        st.createIndex("date","date");
+        st.createIndex("type","type");
+      }
+    };
+    rq.onsuccess = ()=>{ db = rq.result; res(); };
+    rq.onerror = ()=>rej(rq.error);
+  });
+}
+function put(store,obj){ return new Promise((res,rej)=>{
+  const tx = db.transaction(store,"readwrite");
+  tx.objectStore(store).put(obj);
+  tx.oncomplete = ()=>res(obj); tx.onerror = ()=>rej(tx.error);
+});}
+function del(store,id){ return new Promise((res,rej)=>{
+  const tx = db.transaction(store,"readwrite");
+  tx.objectStore(store).delete(id);
+  tx.oncomplete = res; tx.onerror = ()=>rej(tx.error);
+});}
+function getAll(store){ return new Promise((res,rej)=>{
+  const rq = db.transaction(store).objectStore(store).getAll();
+  rq.onsuccess = ()=>res(rq.result); rq.onerror = ()=>rej(rq.error);
+});}
+function getOne(store,id){ return new Promise((res,rej)=>{
+  const rq = db.transaction(store).objectStore(store).get(id);
+  rq.onsuccess = ()=>res(rq.result); rq.onerror = ()=>rej(rq.error);
+});}
+
+/* ---------- タブ ---------- */
+$$("nav button").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    $$("nav button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    $$(".panel").forEach(p=>p.classList.remove("active"));
+    $("#panel-"+b.dataset.p).classList.add("active");
+    if(b.dataset.p==="log") renderTimeline();
+    if(b.dataset.p==="care"){ renderCare(); drawMoodChart(); }
+    if(b.dataset.p==="shrimp") renderShrimp();
+    if(b.dataset.p==="dump") renderDumps();
+  });
+});
+
+/* ---------- 音声認識ヘルパー ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function makeRecognizer(onText, onEnd){
+  if(!SR) return null;
+  const r = new SR();
+  r.lang = "ja-JP";
+  r.continuous = true;
+  r.interimResults = true;
+  let finalText = "";
+  r.onresult = e=>{
+    let interim = "";
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const t = e.results[i][0].transcript;
+      if(e.results[i].isFinal) finalText += t;
+      else interim += t;
+    }
+    onText(finalText, interim);
+  };
+  r.onend = ()=>{ if(onEnd) onEnd(finalText); };
+  r.onerror = ()=>{};
+  return r;
+}
+
+/* =========================================================
+   録音（音声が主役・文字起こしはベストエフォート）
+   ========================================================= */
+let mediaRecorder=null, chunks=[], recStart=0, recTimer=null,
+    audioCtx=null, analyser=null, waveRaf=null, recRecog=null, recTranscript="";
+
+const recBtn = $("#recBtn"), recTime = $("#recTime"),
+      recState = $("#recState"), liveText = $("#liveText");
+
+recBtn.addEventListener("click", async ()=>{
+  if(mediaRecorder && mediaRecorder.state==="recording"){ stopRec(); return; }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
+               : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm"
+               : "audio/mp4";
+    chunks = [];
+    mediaRecorder = new MediaRecorder(stream, {mimeType:mime, audioBitsPerSecond:48000});
+    mediaRecorder.ondataavailable = e=>{ if(e.data.size) chunks.push(e.data); };
+    mediaRecorder.onstop = ()=>saveRecording(stream, mime);
+    mediaRecorder.start(1000);
+    recStart = Date.now();
+    recBtn.classList.add("recording");
+    recBtn.textContent = "⏹";
+    recState.textContent = "きいてるよ…タップで終了";
+    recTimer = setInterval(()=>{ recTime.textContent = fmtDur((Date.now()-recStart)/1000); }, 250);
+
+    // 波形
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 128;
+    src.connect(analyser);
+    drawWave();
+
+    // 文字起こし（動けばラッキー方式：端末により録音と競合することがある）
+    recTranscript = "";
+    liveText.style.display = "block";
+    liveText.textContent = "";
+    recRecog = makeRecognizer((fin, interim)=>{
+      recTranscript = fin;
+      liveText.textContent = fin + interim;
+    });
+    if(recRecog){ try{ recRecog.start(); }catch(e){} }
+  }catch(err){
+    recState.textContent = "マイクが使えなかった… 権限を確認してね";
+  }
+});
+
+function drawWave(){
+  const cv = $("#wave"), ctx = cv.getContext("2d");
+  cv.width = cv.clientWidth * devicePixelRatio;
+  cv.height = cv.clientHeight * devicePixelRatio;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  (function loop(){
+    waveRaf = requestAnimationFrame(loop);
+    analyser.getByteFrequencyData(data);
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const n = 32, w = cv.width/n;
+    for(let i=0;i<n;i++){
+      const v = data[i]/255;
+      const h = Math.max(3*devicePixelRatio, v*cv.height*0.9);
+      ctx.fillStyle = "rgba(242,161,150,.85)";
+      const r = w*0.28;
+      const x = i*w + w*0.2, y = (cv.height-h)/2, bw = w*0.6;
+      ctx.beginPath();
+      ctx.roundRect(x, y, bw, h, r);
+      ctx.fill();
+    }
+  })();
+}
+
+function stopRec(){
+  if(recTimer) clearInterval(recTimer);
+  if(waveRaf) cancelAnimationFrame(waveRaf);
+  if(recRecog){ try{ recRecog.stop(); }catch(e){} }
+  if(mediaRecorder && mediaRecorder.state==="recording") mediaRecorder.stop();
+  recBtn.classList.remove("recording");
+  recBtn.textContent = "🎙️";
+  recState.textContent = "ほぞんしたよ";
+}
+
+async function saveRecording(stream, mime){
+  stream.getTracks().forEach(t=>t.stop());
+  if(audioCtx){ audioCtx.close(); audioCtx = null; }
+  const dur = (Date.now()-recStart)/1000;
+  if(dur < 0.6){ recState.textContent = "みじかすぎたので保存しなかったよ"; return; }
+  const blob = new Blob(chunks, {type:mime});
+  const now = new Date();
+  await put("recordings", {
+    id: uid(), ts: now.getTime(), date: dateStr(now),
+    blob, mime, dur, transcript: recTranscript.trim()
+  });
+  recTime.textContent = "0:00";
+  liveText.style.display = "none";
+  toast("🦐 声をのこしたよ");
+  recState.textContent = "タップで録音スタート";
+  renderShrimpBadge();
+}
+
+/* =========================================================
+   やらなきゃ吐き出しBOX（音声認識のみ・録音しない）
+   ========================================================= */
+const dumpText = $("#dumpText"), dumpMic = $("#dumpMic");
+let dumpRecog = null, dumpListening = false, dumpFilter = "open";
+
+dumpText.addEventListener("input", ()=>{
+  dumpText.style.height = "auto";
+  dumpText.style.height = Math.min(dumpText.scrollHeight,160)+"px";
+});
+
+dumpMic.addEventListener("click", ()=>{
+  if(dumpListening){ try{ dumpRecog.stop(); }catch(e){} return; }
+  if(!SR){ toast("この端末では音声入力が使えないみたい。タイプでどうぞ"); return; }
+  const base = dumpText.value ? dumpText.value.replace(/\s+$/,"")+" " : "";
+  dumpRecog = makeRecognizer(
+    (fin, interim)=>{ dumpText.value = base + fin + interim; },
+    ()=>{ dumpListening = false; dumpMic.classList.remove("listening"); }
+  );
+  try{
+    dumpRecog.start();
+    dumpListening = true;
+    dumpMic.classList.add("listening");
+    toast("きいてるよ。話し終わったらもう一度タップ");
+  }catch(e){ toast("音声入力を始められなかった…"); }
+});
+
+$("#dumpSave").addEventListener("click", async ()=>{
+  const text = dumpText.value.trim();
+  if(!text){ toast("なにか出したくなったら、いつでもどうぞ"); return; }
+  if(dumpListening){ try{ dumpRecog.stop(); }catch(e){} }
+  const now = new Date();
+  // 改行・読点区切りで複数アイテムに分ける（1個でもOK）
+  const parts = text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  for(const p of parts){
+    await put("entries", {id:uid(), type:"dump", ts:now.getTime(), date:dateStr(now), text:p, status:"open"});
+  }
+  dumpText.value = "";
+  dumpText.style.height = "auto";
+  toast(parts.length>1 ? `🫧 ${parts.length}こ、置いていったよ` : "🫧 ここで預かっておくね");
+  renderDumps();
+});
+
+$$(".chip").forEach(c=>c.addEventListener("click", ()=>{
+  $$(".chip").forEach(x=>x.classList.remove("on"));
+  c.classList.add("on");
+  dumpFilter = c.dataset.f;
+  renderDumps();
+}));
+
+async function renderDumps(){
+  const all = (await getAll("entries")).filter(e=>e.type==="dump" && (e.status||"open")===dumpFilter);
+  all.sort((a,b)=>b.ts-a.ts);
+  const box = $("#dumpList");
+  if(!all.length){
+    box.innerHTML = `<div class="dump-empty">${
+      dumpFilter==="open" ? "いまは、からっぽ。<br>頭が重くなったらいつでも置きにきてね 🫧"
+      : dumpFilter==="done" ? "「できた」がここにたまっていくよ" : "手放したものがここに流れつくよ 🌊"
+    }</div>`;
+    return;
+  }
+  box.innerHTML = "";
+  for(const e of all){
+    const div = document.createElement("div");
+    div.className = "dump-item";
+    const when = new Date(e.ts);
+    div.innerHTML = `<div class="txt">${esc(e.text)}<span class="when">${dateStr(when).slice(5)} ${timeStr(when)}</span></div>`;
+    const acts = document.createElement("div");
+    acts.className = "acts";
+    if(dumpFilter==="open"){
+      const bd = mkBtn("✔ できた", async ()=>{ e.status="done"; await put("entries",e); fade(div); toast("えらい！ひとつ軽くなったね"); });
+      const br = mkBtn("🌊 ながす", async ()=>{ e.status="released"; await put("entries",e); fade(div); toast("うん、それは流していい"); });
+      acts.append(bd,br);
+    }else{
+      const bb = mkBtn("↩ もどす", async ()=>{ e.status="open"; await put("entries",e); fade(div); });
+      acts.append(bb);
+    }
+    div.append(acts);
+    box.append(div);
+  }
+}
+function mkBtn(label,fn){ const b=document.createElement("button"); b.textContent=label; b.addEventListener("click",fn); return b; }
+function fade(el){ el.classList.add("fadeout"); setTimeout(()=>renderDumps(), 480); }
+function esc(s){ return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+/* =========================================================
+   きぶん・エネルギー
+   ========================================================= */
+let moodSel = null, energySel = null, moodTm = null;
+
+function bindMoodRow(rowId, setter){
+  $("#"+rowId).addEventListener("click", e=>{
+    const b = e.target.closest("button"); if(!b) return;
+    $$("#"+rowId+" button").forEach(x=>x.classList.remove("sel"));
+    b.classList.add("sel");
+    setter(Number(b.dataset.v));
+    clearTimeout(moodTm);
+    moodTm = setTimeout(saveMood, 900);
+  });
+}
+bindMoodRow("moodRow", v=>moodSel=v);
+bindMoodRow("energyRow", v=>energySel=v);
+
+async function saveMood(){
+  if(moodSel===null && energySel===null) return;
+  const now = new Date();
+  await put("entries", {id:uid(), type:"mood", ts:now.getTime(), date:dateStr(now), mood:moodSel, energy:energySel});
+  toast("きろくしたよ 🩷");
+  drawMoodChart();
+  renderShrimpBadge();
+}
+
+async function drawMoodChart(){
+  const cv = $("#moodChart"), ctx = cv.getContext("2d");
+  cv.width = cv.clientWidth*devicePixelRatio; cv.height = cv.clientHeight*devicePixelRatio;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const days = [];
+  for(let i=13;i>=0;i--){
+    const d = new Date(); d.setDate(d.getDate()-i);
+    days.push(dateStr(d));
+  }
+  const all = (await getAll("entries")).filter(e=>e.type==="mood");
+  // 各日の記録をマージ（気分だけ・エネルギーだけの記録が別でも両方残す）
+  const byDay = {};
+  all.sort((a,b)=>a.ts-b.ts).forEach(e=>{
+    const cur = byDay[e.date] || {};
+    byDay[e.date] = {
+      mood:   e.mood   != null ? e.mood   : cur.mood,
+      energy: e.energy != null ? e.energy : cur.energy
+    };
+  });
+  const W = cv.width, H = cv.height, n = days.length, colW = W/n;
+  // エネルギー棒
+  days.forEach((d,i)=>{
+    const e = byDay[d];
+    if(e && e.energy!=null){
+      const h = (e.energy+1)/5 * H*0.75;
+      ctx.fillStyle = "rgba(94,181,160,.28)";
+      ctx.beginPath();
+      ctx.roundRect(i*colW+colW*0.25, H-h, colW*0.5, h, 3*devicePixelRatio);
+      ctx.fill();
+    }
+  });
+  // 気分ライン
+  ctx.strokeStyle = "#f2a196"; ctx.lineWidth = 2.5*devicePixelRatio;
+  ctx.lineJoin = "round"; ctx.beginPath();
+  let started = false;
+  days.forEach((d,i)=>{
+    const e = byDay[d];
+    if(e && e.mood!=null){
+      const y = H*0.5 - (e.mood/2)*H*0.36;
+      const x = i*colW + colW/2;
+      if(!started){ ctx.moveTo(x,y); started = true; } else ctx.lineTo(x,y);
+    }
+  });
+  ctx.stroke();
+  // 気分ドット
+  days.forEach((d,i)=>{
+    const e = byDay[d];
+    if(e && e.mood!=null){
+      const y = H*0.5 - (e.mood/2)*H*0.36;
+      ctx.fillStyle = "#f2a196";
+      ctx.beginPath(); ctx.arc(i*colW+colW/2, y, 3.5*devicePixelRatio, 0, 7); ctx.fill();
+    }
+  });
+}
+
+/* =========================================================
+   セルフケア（できた分だけで満点）
+   ========================================================= */
+const CARE_ITEMS = [
+  {k:"eat",   e:"🍚", t:"なにか食べた"},
+  {k:"water", e:"🫖", t:"水分をとった"},
+  {k:"med",   e:"💊", t:"くすり（あれば）"},
+  {k:"bath",  e:"🛁", t:"おふろ・シャワー"},
+  {k:"air",   e:"🌿", t:"そとの空気を吸った"},
+  {k:"sleep", e:"🌙", t:"よこになって休んだ"},
+];
+
+async function renderCare(){
+  const today = dateStr(new Date());
+  const id = "care-"+today;
+  let entry = await getOne("entries", id);
+  if(!entry) entry = {id, type:"care", ts:Date.now(), date:today, care:{}};
+  const box = $("#careList");
+  box.innerHTML = "";
+  for(const item of CARE_ITEMS){
+    const div = document.createElement("div");
+    div.className = "care-item" + (entry.care[item.k] ? " done" : "");
+    div.innerHTML = `<div class="box">✓</div><div class="lbl">${item.e} ${item.t}</div>`;
+    div.addEventListener("click", async ()=>{
+      entry.care[item.k] = !entry.care[item.k];
+      entry.ts = Date.now();
+      await put("entries", entry);
+      renderCare();
+      if(entry.care[item.k]) toast("それができたの、ちゃんとすごいよ");
+      renderShrimpBadge();
+    });
+    box.append(div);
+  }
+}
+
+/* =========================================================
+   きろく（タイムライン）
+   ========================================================= */
+let playingAudio = null;
+
+async function renderTimeline(){
+  const recs = await getAll("recordings");
+  const ents = (await getAll("entries")).filter(e=>e.type!=="care");
+  const cares = (await getAll("entries")).filter(e=>e.type==="care");
+  const items = [
+    ...recs.map(r=>({kind:"rec", ts:r.ts, date:r.date, r})),
+    ...ents.map(e=>({kind:e.type, ts:e.ts, date:e.date, e})),
+    ...cares.map(e=>({kind:"care", ts:e.ts, date:e.date, e})),
+  ].sort((a,b)=>b.ts-a.ts);
+
+  const tl = $("#timeline");
+  tl.innerHTML = "";
+  if(!items.length){
+    tl.innerHTML = `<div class="card" style="text-align:center;color:var(--sub);font-size:13px;line-height:2">まだ、まっさら。<br>さいしょのひと声から、はじまるよ 🦐</div>`;
+    return;
+  }
+  let curDay = "";
+  for(const it of items){
+    if(it.date !== curDay){
+      curDay = it.date;
+      const d = new Date(it.date+"T00:00:00");
+      const h = document.createElement("div");
+      h.className = "day-group";
+      h.innerHTML = `<h3>${it.date.replace(/-/g,"/")}（${WEEK[d.getDay()]}）</h3>`;
+      tl.append(h);
+    }
+    tl.append(tlCard(it));
+  }
+}
+
+function tlCard(it){
+  const div = document.createElement("div");
+  div.className = "tl-item";
+  const when = timeStr(new Date(it.ts));
+  if(it.kind==="rec"){
+    const r = it.r;
+    div.innerHTML = `
+      <div class="tl-top"><span class="ico">🎙️</span>${when} の声<button class="del">✕</button></div>
+      <div class="tl-audio">
+        <button class="play-btn">▶</button>
+        <span class="tl-dur">${fmtDur(r.dur)}</span>
+      </div>
+      ${r.transcript ? `<div class="tl-body">${esc(r.transcript)}</div>` : ""}`;
+    const pb = div.querySelector(".play-btn");
+    let myAudio = null;
+    pb.addEventListener("click", ()=>{
+      if(myAudio && !myAudio.paused){ myAudio.pause(); pb.textContent = "▶"; return; }
+      if(playingAudio && !playingAudio.paused){ playingAudio.pause(); $$(".play-btn").forEach(b=>b.textContent="▶"); }
+      if(!myAudio){
+        myAudio = new Audio(URL.createObjectURL(r.blob));
+        myAudio.onended = ()=>{ pb.textContent = "▶"; };
+      }
+      playingAudio = myAudio;
+      pb.textContent = "⏸";
+      myAudio.play();
+    });
+    div.querySelector(".del").addEventListener("click", async ()=>{
+      if(confirm("この声をけす？（もどせないよ）")){ await del("recordings", r.id); renderTimeline(); }
+    });
+  }
+  else if(it.kind==="dump"){
+    const e = it.e;
+    const mark = e.status==="done" ? "✔" : e.status==="released" ? "🌊" : "🫧";
+    div.innerHTML = `<div class="tl-top"><span class="ico">${mark}</span>${when} やらなきゃBOX</div>
+      <div class="tl-body">${esc(e.text)}</div>`;
+  }
+  else if(it.kind==="mood"){
+    const e = it.e;
+    const mFace = ["😞","😕","😐","🙂","😄"][ (e.mood??0)+2 ] || "";
+    const eFace = ["🪫","🔅","🔆","✨","⚡"][ e.energy ?? -1 ] || "";
+    div.innerHTML = `<div class="tl-top"><span class="ico">🩷</span>${when} きぶん</div>
+      <div class="tl-body"><span class="mood-badge">${mFace}</span><span class="mood-badge">${eFace}</span></div>`;
+  }
+  else if(it.kind==="care"){
+    const e = it.e;
+    const done = CARE_ITEMS.filter(c=>e.care && e.care[c.k]).map(c=>c.e).join(" ");
+    if(!done){ div.style.display = "none"; return div; }
+    div.innerHTML = `<div class="tl-top"><span class="ico">🌱</span>きょうの自分ケア</div>
+      <div class="tl-body">${done}</div>`;
+  }
+  return div;
+}
+
+/* =========================================================
+   エビの成長（連続記録は数えない。来た日だけ数える）
+   ========================================================= */
+const STAGES = [
+  {min:0,  name:"たまご",       sub:"はじまりの気配。",                          scale:.45},
+  {min:1,  name:"ちエビ",       sub:"うまれたて。ちいさな一歩。",                scale:.6},
+  {min:3,  name:"こエビ",       sub:"すこしエビらしくなってきた。",              scale:.75},
+  {min:7,  name:"わかエビ",     sub:"1週間ぶんの声がしみこんでる。",             scale:.88},
+  {min:14, name:"おとなエビ",   sub:"りっぱなヒゲ。堂々としてきた。",            scale:1.0},
+  {min:30, name:"ぬしエビ",     sub:"この海のぬし。あなたの声の海。",            scale:1.12},
+  {min:60, name:"でんせつエビ", sub:"つづけた日がぜんぶ、光ってる。",            scale:1.25},
+];
+
+async function activeDays(){
+  const recs = await getAll("recordings");
+  const ents = await getAll("entries");
+  const s = new Set();
+  recs.forEach(r=>s.add(r.date));
+  ents.forEach(e=>{
+    if(e.type==="care"){ if(e.care && Object.values(e.care).some(Boolean)) s.add(e.date); }
+    else s.add(e.date);
+  });
+  return s.size;
+}
+
+async function renderShrimp(){
+  const days = await activeDays();
+  let st = STAGES[0], next = null;
+  for(const s of STAGES){ if(days>=s.min) st = s; }
+  const idx = STAGES.indexOf(st);
+  next = STAGES[idx+1] || null;
+  $("#stageName").textContent = `${st.name}（きろく ${days} 日）`;
+  $("#stageSub").innerHTML = st.sub + "<br>" +
+    (next ? `つぎの「${next.name}」まで、あと ${next.min-days} 日ぶん` : "ここまで来たの、ほんとうにすごい。");
+  const prog = next ? (days - st.min) / (next.min - st.min) : 1;
+  $("#stageBar").style.width = Math.round(prog*100)+"%";
+  drawShrimp(st.scale, idx);
+}
+
+function drawShrimp(scale, stage){
+  const svg = $("#shrimpSvg");
+  if(stage===0){ // たまご
+    svg.innerHTML = `
+      <ellipse cx="100" cy="95" rx="34" ry="42" fill="#fbd9d3" stroke="#f2a196" stroke-width="3"/>
+      <circle cx="90" cy="85" r="5" fill="#fff" opacity=".8"/>
+      <ellipse cx="100" cy="145" rx="46" ry="8" fill="#cfe8df"/>`;
+    return;
+  }
+  const g = 100 - 100*scale;
+  svg.innerHTML = `
+  <g transform="translate(${g/2} ${g/2}) scale(${scale})">
+    <ellipse cx="100" cy="150" rx="60" ry="9" fill="#cfe8df"/>
+    <!-- しっぽ -->
+    <path d="M150 95 q28 -6 30 -26 q-4 12 -14 14 q8 -12 6 -24 q-8 14 -18 16 z" fill="#f2a196"/>
+    <!-- 体（まるまったエビ） -->
+    <path d="M60 60 q55 -30 92 8 q20 22 2 42 q-16 18 -44 12 q6 12 -6 16 q-10 4 -14 -8 q-18 -2 -28 -16 q-16 -22 -2 -54 z"
+          fill="#f6b3a8"/>
+    <path d="M66 66 q48 -26 82 8 q16 20 0 36 q-14 14 -38 10" fill="none" stroke="#f2a196" stroke-width="7" stroke-linecap="round"/>
+    <!-- 節 -->
+    <path d="M96 52 q4 16 -2 30 M116 52 q6 16 2 32 M134 60 q8 14 4 28" stroke="#f2a196" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <!-- あし -->
+    <path d="M84 118 q-2 12 -10 16 M98 124 q0 12 -8 18 M112 124 q2 12 -4 18" stroke="#f2a196" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <!-- ヒゲ -->
+    <path d="M62 62 q-26 -10 -44 4 M64 70 q-24 0 -38 16" stroke="#e89486" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <!-- 目 -->
+    <circle cx="70" cy="72" r="6.5" fill="#3a4a47"/>
+    <circle cx="72.5" cy="69.5" r="2.2" fill="#fff"/>
+    <!-- ほっぺ -->
+    <circle cx="80" cy="86" r="5" fill="#f7b8c2" opacity=".7"/>
+    ${stage>=5 ? '<path d="M88 20 l6 14 14 2 -10 10 3 14 -13 -7 -13 7 3 -14 -10 -10 14 -2 z" fill="#ffd98e" transform="translate(8 -6) scale(.9)"/>' : ""}
+  </g>`;
+}
+
+async function renderShrimpBadge(){ /* 将来：タブにバッジ等。今は成長再計算のみ */ }
+
+/* =========================================================
+   Markdown エクスポート（Obsidian フレンドリー）
+   ========================================================= */
+$("#exportMd").addEventListener("click", async ()=>{
+  const recs = await getAll("recordings");
+  const ents = await getAll("entries");
+  const byDay = {};
+  const push = (d, line)=>{ (byDay[d] = byDay[d]||[]).push(line); };
+  recs.forEach(r=>push(r.date, {ts:r.ts, md:`- ${timeStr(new Date(r.ts))} 🎙️ 録音（${fmtDur(r.dur)}）${r.transcript?`\n\t- ${r.transcript.replace(/\n/g," ")}`:""}`}));
+  ents.forEach(e=>{
+    if(e.type==="dump"){
+      const mark = e.status==="done"?"x":" ";
+      push(e.date, {ts:e.ts, md:`- [${mark}] 🫧 ${e.text}${e.status==="released"?"（🌊ながした）":""}`});
+    }else if(e.type==="mood"){
+      push(e.date, {ts:e.ts, md:`- ${timeStr(new Date(e.ts))} 🩷 きぶん:${e.mood??"-"} / エネルギー:${e.energy??"-"}`});
+    }else if(e.type==="care"){
+      const done = CARE_ITEMS.filter(c=>e.care&&e.care[c.k]).map(c=>c.t).join("、");
+      if(done) push(e.date, {ts:e.ts, md:`- 🌱 自分ケア: ${done}`});
+    }
+  });
+  const days = Object.keys(byDay).sort().reverse();
+  let md = `# Koebi きろく\n\n> exported ${dateStr(new Date())} / データは端末内のみで管理\n\n`;
+  for(const d of days){
+    md += `## ${d}\n\n`;
+    byDay[d].sort((a,b)=>a.ts-b.ts).forEach(x=>{ md += x.md + "\n"; });
+    md += "\n";
+  }
+  const blob = new Blob([md], {type:"text/markdown"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `koebi_${dateStr(new Date())}.md`;
+  a.click();
+  toast("📄 書き出したよ");
+});
+
+/* ---------- PWA インストール ---------- */
+let deferredPrompt = null;
+window.addEventListener("beforeinstallprompt", e=>{
+  e.preventDefault();
+  deferredPrompt = e;
+  $("#installBtn").style.display = "block";
+});
+$("#installBtn").addEventListener("click", async ()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt = null;
+  $("#installBtn").style.display = "none";
+});
+
+/* ---------- 起動 ---------- */
+(async function init(){
+  const now = new Date();
+  $("#todayLabel").textContent = `${now.getMonth()+1}/${now.getDate()}（${WEEK[now.getDay()]}）`;
+  await openDB();
+  if(navigator.storage && navigator.storage.persist){ try{ await navigator.storage.persist(); }catch(e){} }
+  renderDumps(); renderCare(); drawMoodChart(); renderShrimp();
+  if("serviceWorker" in navigator){
+    try{ await navigator.serviceWorker.register("sw.js"); }catch(e){}
+  }
+})();
+</script>
+</body>
+</html>
