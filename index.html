@@ -115,7 +115,7 @@ button{font-family:inherit;border:none;cursor:pointer;color:var(--ink)}
 .b-meta .ico{font-size:15px}
 .b-meta .sp{flex:1}
 .b-meta button{background:none;font-size:13px;color:#b9cdc7;padding:4px 6px}
-canvas.vp{width:100%;height:46px;display:block;margin:8px 0 2px;border-radius:8px}
+canvas.vp{width:100%;height:58px;display:block;margin:8px 0 2px;border-radius:8px}
 .b-text{font-size:14px;line-height:1.75;margin-top:6px;word-break:break-word}
 .b-text.empty{color:var(--sub);font-size:12px}
 .b-edit textarea{
@@ -153,6 +153,14 @@ canvas.vp{width:100%;height:46px;display:block;margin:8px 0 2px;border-radius:8p
 .care-item.done .box{background:var(--accent);color:#fff}
 .care-item.done .lbl{color:var(--sub)}
 .care-note{font-size:12px;color:var(--sub);text-align:center;margin-top:12px;line-height:1.8}
+#careEditBtn{float:right;background:none;color:#b9cdc7;font-size:15px;padding:2px 8px}
+.care-rm{margin-left:auto;background:none;color:#c9d8d3;font-size:14px;padding:4px 8px;flex:none}
+.care-add{display:flex;gap:8px;margin-top:12px}
+.care-add input{
+  flex:1;font-family:inherit;font-size:14px;border:none;outline:none;
+  background:var(--bg2);border-radius:12px;padding:10px 12px;color:var(--ink);min-width:0;
+}
+.care-add button{font-size:12.5px;padding:10px 12px;border-radius:12px;background:var(--bg2);flex:none}
 .slip-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}
 .slip-grid button{
   background:var(--bg2);border-radius:14px;padding:12px 4px;font-size:12.5px;line-height:1.5;
@@ -265,7 +273,7 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
     <p class="hint" style="text-align:center;margin-top:6px">直近14日間 — 線＝気分、棒＝エネルギー（上＝過剰／下＝枯渇）</p>
   </div>
   <div class="card">
-    <h2>今日のセルフケア</h2>
+    <h2>今日のセルフケア <button id="careEditBtn" title="項目を編集">✎</button></h2>
     <div id="careList"></div>
     <p class="care-note">できた分だけで十分です。</p>
   </div>
@@ -308,7 +316,7 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
   <div class="card">
     <h2>このアプリについて</h2>
     <p class="hint">
-      Koebi（こえび）v0.3 — nomacod<br>
+      Koebi（こえび）v0.4 — nomacod<br>
       データはすべてこの端末内に保存され、外部送信はありません。<br>
       つらいときは、信頼できる人や専門家にも頼ってください。
     </p>
@@ -482,23 +490,56 @@ function fallbackPeaks(id){
     return 0.25 + (h % 1000)/1000*0.6 * (0.6 + 0.4*Math.sin(i/4));
   });
 }
-function drawPeaks(cv, peaks, prog){
+/* 水泡声紋：声の強さ＝泡の大きさ。再生が進むと泡が満ちていく。
+   録音ごとに配置が変わり（idシード）、波タグは海の色になる。
+   ——将来のSNSで「声のサムネイル」になるビジュアル。 */
+function seededRand(seedStr){
+  let h = 2166136261;
+  for(const c of seedStr){ h = (h ^ c.charCodeAt(0)) * 16777619 >>> 0; }
+  return ()=>{ h = (h * 1103515245 + 12345) >>> 0; return (h % 10000) / 10000; };
+}
+function drawPeaks(cv, peaks, prog, opts){
+  opts = opts || {};
   const ctx = cv.getContext("2d");
   if(!cv._sized){
     cv.width = cv.clientWidth * devicePixelRatio;
     cv.height = cv.clientHeight * devicePixelRatio;
     cv._sized = true;
   }
-  const W = cv.width, H = cv.height, n = peaks.length, colW = W/n;
+  const W = cv.width, H = cv.height;
+  // 間引いて泡らしい疎密に（52ピーク → 30泡）
+  const n = 30;
+  const src = i => peaks[Math.min(peaks.length-1, Math.round(i * (peaks.length-1) / (n-1)))];
+  const rnd = seededRand(opts.seed || "koebi");
+  const jitter = Array.from({length:n}, ()=>({y:(rnd()-0.5), r:0.7 + rnd()*0.6}));
   ctx.clearRect(0,0,W,H);
+  const colW = W/n;
+  const pal = opts.wave
+    ? {on:"#7fb6cc", off:"rgba(127,182,204,.16)", edge:"rgba(127,182,204,.40)"}
+    : {on:"#f2a196", off:"rgba(242,161,150,.14)", edge:"rgba(242,161,150,.40)"};
   for(let i=0;i<n;i++){
-    const v = Math.max(0.08, peaks[i]);
-    const h = v * H * 0.86;
-    ctx.fillStyle = (i/n) <= (prog||0) ? "#f2a196" : "#e8d8d4";
-    const bw = colW*0.55, x = i*colW + colW*0.22, y = (H-h)/2;
+    const v = Math.max(0.10, src(i));
+    const r = Math.max(2*devicePixelRatio, (0.12 + 0.88*v) * H * 0.26 * jitter[i].r);
+    const x = i*colW + colW/2;
+    const y = H/2 + jitter[i].y * (H - 2*r) * 0.85;
+    const played = (prog||0) > 0 && (i/n) <= prog;
     ctx.beginPath();
-    ctx.roundRect(x, y, bw, h, bw/2);
-    ctx.fill();
+    ctx.arc(x, y, r, 0, 7);
+    if(played){
+      ctx.fillStyle = pal.on;
+      ctx.fill();
+      // 泡のハイライト
+      ctx.beginPath();
+      ctx.arc(x - r*0.32, y - r*0.35, Math.max(1, r*0.22), 0, 7);
+      ctx.fillStyle = "rgba(255,255,255,.65)";
+      ctx.fill();
+    }else{
+      ctx.fillStyle = pal.off;
+      ctx.fill();
+      ctx.lineWidth = Math.max(1, devicePixelRatio);
+      ctx.strokeStyle = pal.edge;
+      ctx.stroke();
+    }
   }
 }
 
@@ -727,7 +768,8 @@ function fade(el){ el.classList.add("fadeout"); setTimeout(()=>renderDumps(), 48
 /* =========================================================
    気分・エネルギー
    ========================================================= */
-let moodSel = null, energySel = null, moodTm = null;
+let moodSel = null, energySel = null, moodTm = null,
+    moodEntryId = null, moodEntryTs = 0;   // 連続タップは同じ記録を更新（重複防止）
 
 function bindMoodRow(rowId, setter){
   $("#"+rowId).addEventListener("click", e=>{
@@ -744,9 +786,14 @@ bindMoodRow("energyRow", v=>energySel=v);
 
 async function saveMood(){
   if(moodSel===null && energySel===null) return;
-  const now = new Date();
-  await put("entries", {id:uid(), type:"mood", ts:now.getTime(), date:dateStr(now), mood:moodSel, energy2:energySel});
-  toast("記録しました");
+  const now = Date.now();
+  // 10分以内の続けての操作は「同じ1件」を更新する（気分→エネルギーで2件にならない）
+  const reuse = moodEntryId && (now - moodEntryTs) < 10*60*1000;
+  const id = reuse ? moodEntryId : uid();
+  await put("entries", {id, type:"mood", ts:now, date:dateStr(new Date(now)), mood:moodSel, energy2:energySel});
+  moodEntryId = id;
+  moodEntryTs = now;
+  toast(reuse ? "更新しました" : "記録しました");
   drawMoodChart();
 }
 
@@ -811,35 +858,81 @@ async function drawMoodChart(){
 /* =========================================================
    セルフケア
    ========================================================= */
-const CARE_ITEMS = [
-  {k:"eat",   e:"🍚", t:"何か食べた"},
-  {k:"water", e:"🫖", t:"水分をとった"},
-  {k:"sleep", e:"🌙", t:"寝る準備を整えた"},
-  {k:"room",  e:"🧺", t:"部屋のことを1つ片付けた"},
-  {k:"air",   e:"🌿", t:"外の空気を吸った"},
-  {k:"bath",  e:"🛁", t:"入浴・シャワー"},
+const CARE_DEFAULTS = [
+  {k:"eat",   t:"🍚 何か食べた"},
+  {k:"water", t:"🫖 水分をとった"},
+  {k:"sleep", t:"🌙 寝る準備を整えた"},
+  {k:"room",  t:"🧺 部屋のことを1つ片付けた"},
+  {k:"air",   t:"🌿 外の空気を吸った"},
+  {k:"bath",  t:"🛁 入浴・シャワー"},
 ];
+function careItems(){
+  try{
+    const c = JSON.parse(localStorage.getItem("koebi.care") || "");
+    if(Array.isArray(c) && c.length) return c;
+  }catch(e){}
+  return CARE_DEFAULTS;
+}
+function saveCareItems(list){
+  if(list) localStorage.setItem("koebi.care", JSON.stringify(list));
+  else localStorage.removeItem("koebi.care");
+}
 
 async function getCareEntry(dstr){
   const id = "care-"+dstr;
   return (await getOne("entries", id)) || {id, type:"care", ts:Date.now(), date:dstr, care:{}};
 }
 
+let careEditing = false;
+
 async function renderCare(){
+  const items = careItems();
   const entry = await getCareEntry(dateStr(new Date()));
   const box = $("#careList");
   box.innerHTML = "";
-  for(const item of CARE_ITEMS){
+  for(const item of items){
     const div = document.createElement("div");
     div.className = "care-item" + (entry.care[item.k] ? " done" : "");
-    div.innerHTML = `<div class="box">✓</div><div class="lbl">${item.e} ${item.t}</div>`;
-    div.addEventListener("click", async ()=>{
-      entry.care[item.k] = !entry.care[item.k];
-      entry.ts = Date.now();
-      await put("entries", entry);
+    div.innerHTML = `<div class="box">✓</div><div class="lbl">${esc(item.t)}</div>`;
+    if(careEditing){
+      const rm = document.createElement("button");
+      rm.className = "care-rm";
+      rm.textContent = "✕";
+      rm.addEventListener("click", ev=>{
+        ev.stopPropagation();
+        saveCareItems(items.filter(x=>x.k !== item.k));
+        renderCare();
+      });
+      div.append(rm);
+    }else{
+      div.addEventListener("click", async ()=>{
+        entry.care[item.k] = !entry.care[item.k];
+        entry.ts = Date.now();
+        await put("entries", entry);
+        renderCare();
+      });
+    }
+    box.append(div);
+  }
+  if(careEditing){
+    const row = document.createElement("div");
+    row.className = "care-add";
+    const inp = document.createElement("input");
+    inp.placeholder = "新しい項目（絵文字もOK）";
+    const add = mkBtn("追加", ()=>{
+      const v = inp.value.trim();
+      if(!v) return;
+      saveCareItems([...careItems(), {k:"c"+uid(), t:v}]);
       renderCare();
     });
-    box.append(div);
+    row.append(inp, add);
+    const row2 = document.createElement("div");
+    row2.className = "care-add";
+    row2.append(
+      mkBtn("標準の項目に戻す", ()=>{ saveCareItems(null); renderCare(); }),
+      mkBtn("編集を終える", ()=>{ careEditing = false; renderCare(); })
+    );
+    box.append(row, row2);
   }
 }
 
@@ -966,7 +1059,7 @@ function voiceBubble(r){
 
   // 描画（peaks が無ければ遅延計算して保存）
   let peaks = r.peaks;
-  const paint = prog => drawPeaks(cv, peaks || fallbackPeaks(r.id), prog);
+  const paint = prog => drawPeaks(cv, peaks || fallbackPeaks(r.id), prog, {seed:r.id, wave:r.tag==="wave"});
   requestAnimationFrame(()=>paint(0));
   if(!peaks){
     computePeaks(r.blob).then(p=>{ if(p){ peaks = p; r.peaks = p; put("recordings", r); paint(0); } });
@@ -1081,7 +1174,7 @@ function moodBubble(e){
 }
 
 function careBubble(e){
-  const done = CARE_ITEMS.filter(c=>e.care && e.care[c.k]);
+  const done = careItems().filter(c=>e.care && e.care[c.k]);
   const div = document.createElement("div");
   div.className = "bubble";
   if(!done.length && dateStr(new Date()) !== e.date) return null;
@@ -1090,8 +1183,8 @@ function careBubble(e){
   const body = document.createElement("div");
   body.className = "b-text";
   const setBody = ()=>{
-    const d2 = CARE_ITEMS.filter(c=>e.care && e.care[c.k]);
-    body.textContent = d2.length ? d2.map(c=>c.e+" "+c.t).join("　") : "記録なし";
+    const d2 = careItems().filter(c=>e.care && e.care[c.k]);
+    body.textContent = d2.length ? d2.map(c=>c.t).join("　") : "記録なし";
   };
   setBody();
   div.append(body);
@@ -1101,10 +1194,10 @@ function careBubble(e){
     if(editBox){ editBox.remove(); editBox = null; setBody(); return; }
     editBox = document.createElement("div");
     editBox.className = "care-edit-list";
-    for(const item of CARE_ITEMS){
+    for(const item of careItems()){
       const ci = document.createElement("div");
       ci.className = "care-item" + (e.care && e.care[item.k] ? " done" : "");
-      ci.innerHTML = `<div class="box">✓</div><div class="lbl">${item.e} ${item.t}</div>`;
+      ci.innerHTML = `<div class="box">✓</div><div class="lbl">${esc(item.t)}</div>`;
       ci.addEventListener("click", async ()=>{
         e.care = e.care || {};
         e.care[item.k] = !e.care[item.k];
@@ -1199,7 +1292,7 @@ $("#exportMd").addEventListener("click", async ()=>{
       const ev = energyOf(e);
       push(e.date, {ts:e.ts, md:`- ${timeStr(new Date(e.ts))} 🩷 気分:${e.mood??"-"} / エネルギー:${ev??"-"}`});
     }else if(e.type==="care"){
-      const done = CARE_ITEMS.filter(c=>e.care&&e.care[c.k]).map(c=>c.t).join("、");
+      const done = careItems().filter(c=>e.care&&e.care[c.k]).map(c=>c.t).join("、");
       if(done) push(e.date, {ts:e.ts, md:`- 🌱 セルフケア: ${done}`});
     }else if(e.type==="slip"){
       const s = slipDef(e.k);
@@ -1220,6 +1313,8 @@ $("#exportMd").addEventListener("click", async ()=>{
   a.click();
   toast("書き出しました");
 });
+
+$("#careEditBtn").addEventListener("click", ()=>{ careEditing = !careEditing; renderCare(); });
 
 /* ---------- 設定：音声入力の言語 ---------- */
 function renderLangChips(){
