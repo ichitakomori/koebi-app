@@ -125,11 +125,15 @@ button{font-family:inherit;border:none;cursor:pointer;color:var(--ink)}
 }
 .pb-bg{position:absolute;inset:0;width:100%;height:100%}
 .pb-user{
-  position:relative;display:flex;align-items:center;gap:5px;
-  background:rgba(255,255,255,.85);border-radius:999px;padding:3px 10px;
-  font-size:8.5px;color:var(--sub);box-shadow:0 2px 6px rgba(110,150,135,.18);
+  position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;
 }
-.pb-user img{height:13px;width:auto}
+.pb-ava{
+  width:27px;height:27px;border-radius:50%;overflow:hidden;
+  background:rgba(255,255,255,.9);display:flex;align-items:flex-end;justify-content:center;
+  box-shadow:0 2px 6px rgba(110,150,135,.22);
+}
+.pb-ava svg{width:19px;height:19px}
+.pb-name{font-size:8.5px;color:var(--sub)}
 .pb-kw{
   position:relative;background:none;font-size:12.5px;font-weight:700;
   color:var(--ink);opacity:.88;line-height:1.5;max-width:86%;padding:4px;
@@ -437,7 +441,7 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
       <button class="chip" data-ul="ja">日本語</button>
       <button class="chip" data-ul="en">English</button>
     </div>
-    <p class="hint" style="margin-bottom:4px" id="srLangLabel">音声入力・文字起こしの言語</p>
+    <p class="hint" style="margin-bottom:4px" id="srLangLabel">音声入力・文字起こしの言語 / Speech &amp; transcription language</p>
     <div class="chips" id="langChips" style="margin:8px 0 4px">
       <button class="chip" data-l="auto">自動</button>
       <button class="chip" data-l="ja">日本語</button>
@@ -458,7 +462,7 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
     <button class="exp-btn" id="backupBtn">💾 全データを1ファイルに書き出す</button>
     <button class="exp-btn" id="restoreBtn">📥 バックアップから復元する</button>
     <input type="file" id="restoreFile" accept=".json,application/json" style="display:none">
-    <p class="hint" id="backupNote" style="margin:8px 0 0">
+    <p class="hint" id="bkNote" style="margin:8px 0 0">
       音声を含む全記録を1つのファイルにまとめます（APIキーは含めません）。共有シートからDrive等に保存できます。<br>
       ※保存先フォルダを常時変更する設定は、ブラウザアプリの制約上できません（ネイティブ版で対応予定）。
     </p>
@@ -2074,6 +2078,8 @@ ja:{
   bkT:"データのバックアップ", bkBtn:"💾 全データを1ファイルに書き出す", rsBtn:"📥 バックアップから復元する",
   bkNote:"音声を含む全記録を1つのファイルにまとめます（APIキーは含めません）。共有シートからDrive等に保存できます。<br>※保存先フォルダを常時変更する設定は、ブラウザアプリの制約上できません（ネイティブ版で対応予定）。",
   seaUser:"あなた", seaClose:"閉じる",
+  pageTitle:"Koebi こえび — 声で残す、自分だけの日記",
+  gemPh:"Gemini APIキー（AIza…）",
   aboutBody:`「声（koe）」×「日（bi・日記の日）」、そして小さなエビ（小エビ）。日本語の言葉遊びから生まれた名前です。<br>
 データはこの端末内に保存されます。AI文字起こしを有効にした場合のみ、対象の音声を Google Gemini に送信します。<br>
 つらいときは、信頼できる人や専門家にも頼ってください。`,
@@ -2122,16 +2128,27 @@ en:{
   bkT:"Data backup", bkBtn:"💾 Export all data as one file", rsBtn:"📥 Restore from backup",
   bkNote:"Bundles all records incl. audio into one file (API key excluded). Save to Drive etc. via the share sheet.<br>※ A persistent custom save folder isn't possible in a browser app (planned for the native version).",
   seaUser:"you", seaClose:"Close",
+  pageTitle:"Koebi — your voice diary, kept in bubbles",
+  gemPh:"Gemini API key (AIza…)",
   aboutBody:`<b>Koebi</b> is Japanese wordplay: <i>koe</i> (声, voice) × <i>bi</i> (日, day — as in diary), making a "voice diary". It also sounds like <i>ko-ebi</i> (小エビ) — a little shrimp. The name stays in Japanese on purpose.<br>
 Your data stays on this device. Audio is sent to Google Gemini only when AI transcription is enabled.<br>
 When things get heavy, please also lean on people you trust or professionals.`,
 }
 };
-const uiLangPref = () => localStorage.getItem("koebi.uiLang") || "ja";
+/* 初期値はブラウザの言語設定に追従（一度切り替えたらその選択を記憶） */
+const uiLangPref = () => localStorage.getItem("koebi.uiLang")
+  || ((navigator.language || "ja").toLowerCase().startsWith("ja") ? "ja" : "en");
 const T = k => (STR[uiLangPref()][k] ?? STR.ja[k]);
 
 function applyLang(){
   document.documentElement.lang = uiLangPref() === "en" ? "en" : "ja";
+  document.title = T("pageTitle");
+  // 右上の日付（曜日表記も言語に合わせる）
+  const now = new Date();
+  $("#todayLabel").textContent = uiLangPref() === "en"
+    ? `${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][now.getDay()]}, ${now.getMonth()+1}/${now.getDate()}`
+    : `${now.getMonth()+1}/${now.getDate()}（${WEEK[now.getDay()]}）`;
+  $("#gemKey").placeholder = T("gemPh");
   $$("nav [data-nav]").forEach(e=>{ e.textContent = T("nav")[e.dataset.nav]; });
   if(!(mediaRecorder && mediaRecorder.state === "recording")) recState.textContent = T("tap");
   $("#panel-rec .hint").innerHTML = T("hintRec");
@@ -2281,10 +2298,15 @@ async function renderShare(){
     const bg = document.createElement("canvas");
     bg.className = "pb-bg";
     div.append(bg);
-    // ユーザー小バブル（モック）
+    // ユーザー小バブル（モック：円形no-photoアイコン＋直下に名前）
     const user = document.createElement("div");
     user.className = "pb-user";
-    user.innerHTML = `<img src="icons/shrimp.png" alt=""><span>koebi・${T("seaUser")}</span>`;
+    user.innerHTML = `
+      <span class="pb-ava"><svg viewBox="0 0 24 24">
+        <circle cx="12" cy="8.4" r="4.1" fill="#b9c9c3"/>
+        <path d="M4.5 21a7.5 7.5 0 0 1 15 0z" fill="#b9c9c3"/>
+      </svg></span>
+      <span class="pb-name">${T("seaUser")}</span>`;
     // キーワード（タップで再生/停止）
     const kw = document.createElement("button");
     kw.className = "pb-kw";
