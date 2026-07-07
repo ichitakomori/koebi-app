@@ -176,6 +176,10 @@ canvas.vp{width:100%;height:58px;display:block;margin:8px 0 2px;border-radius:8p
 .progress{width:100%;height:10px;background:var(--bg2);border-radius:99px;margin-top:14px;overflow:hidden}
 .progress i{display:block;height:100%;background:linear-gradient(90deg,var(--shrimp2),var(--shrimp));border-radius:99px;transition:width .6s ease}
 .exp-btn{width:100%;padding:14px;border-radius:16px;font-size:14px;margin-top:8px;background:var(--bg2)}
+#gemKey{
+  width:100%;font-family:inherit;font-size:14px;border:none;outline:none;
+  background:var(--bg2);border-radius:12px;padding:12px 14px;color:var(--ink);
+}
 #installBtn{display:none;width:100%;padding:14px;border-radius:16px;font-size:14px;margin-top:8px;background:var(--sakura);color:#fff}
 
 /* ===== タブバー ===== */
@@ -306,6 +310,15 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
       <button class="chip" data-l="en">English</button>
     </div>
     <p class="hint" style="margin:8px 0 0">自動＝端末の言語設定に合わせます。発話ごとの自動判別は端末の音声認識が対応していないため、英語で話す日は English に切り替えてください。</p>
+    <p class="hint" style="margin:16px 0 4px"><b>AI文字起こし（Gemini）</b></p>
+    <input id="gemKey" type="password" placeholder="Gemini APIキー（AIza…）" autocomplete="off">
+    <div class="chips" style="margin:8px 0 4px">
+      <button class="chip" id="autoTrChip">録音後に自動で文字起こし</button>
+    </div>
+    <p class="hint" style="margin:8px 0 0">
+      録音と同時の文字起こしができない機種向け（この機種も該当）。録音した音声を、<b>文字起こしのときだけ</b> Google Gemini に送ります。キーはこの端末にのみ保存。<br>
+      キーの無料発行：<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey</a> →「Create API key」→ コピーして上に貼り付け。
+    </p>
   </div>
   <div class="card">
     <h2>書き出し</h2>
@@ -317,7 +330,7 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
     <h2>このアプリについて</h2>
     <p class="hint">
       Koebi（こえび）v0.4 — nomacod<br>
-      データはすべてこの端末内に保存され、外部送信はありません。<br>
+      データはこの端末内に保存されます。AI文字起こしを有効にした場合のみ、文字起こし対象の音声を Google Gemini に送信します。<br>
       つらいときは、信頼できる人や専門家にも頼ってください。
     </p>
   </div>
@@ -427,6 +440,54 @@ function resolveLang(){
   if(p === "ja") return "ja-JP";
   if(p === "en") return "en-US";
   return (navigator.language || "ja").toLowerCase().startsWith("en") ? "en-US" : "ja-JP";
+}
+
+/* ---------- AI文字起こし（Gemini・オプトイン） ---------- */
+const getGeminiKey = () => (localStorage.getItem("koebi.gemini") || "").trim();
+const autoTrOn = () => localStorage.getItem("koebi.autoTr") !== "0";
+
+async function transcribeBlob(blob, mime){
+  const key = getGeminiKey();
+  if(!key) return null;
+  const b64 = await new Promise((res, rej)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>res(String(fr.result).split(",")[1]);
+    fr.onerror = rej;
+    fr.readAsDataURL(blob);
+  });
+  const langHint = resolveLang() === "en-US" ? "English" : "日本語";
+  const body = {
+    contents: [{ parts: [
+      { text: `この音声を文字起こししてください。話されている言語（主に${langHint}）のまま、本文のみを出力してください。句読点は適切に補い、前置きや説明は不要です。` },
+      { inline_data: { mime_type: (mime||"audio/webm").split(";")[0], data: b64 } }
+    ]}]
+  };
+  const res = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + encodeURIComponent(key),
+    { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) }
+  );
+  if(!res.ok) throw new Error("Gemini API エラー（" + res.status + "）");
+  const j = await res.json();
+  const text = (j.candidates?.[0]?.content?.parts || []).map(p=>p.text || "").join("").trim();
+  return text || null;
+}
+
+async function transcribeRecording(r, onDone){
+  toast("文字起こし中…");
+  try{
+    const text = await transcribeBlob(r.blob, r.mime);
+    if(text){
+      r.transcript = text;
+      await put("recordings", r);
+      toast("文字起こしができました");
+      if(onDone) onDone(text);
+    }else{
+      toast("文字起こし結果が空でした");
+    }
+  }catch(err){
+    toast(err.message.includes("403") || err.message.includes("400")
+      ? "APIキーを確認してください" : "文字起こしに失敗しました（通信を確認）");
+  }
 }
 
 function makeRecognizer(onText, onEnd, opts){
@@ -564,28 +625,34 @@ waveBtn.addEventListener("click", ()=>{
 recBtn.addEventListener("click", async ()=>{
   if(mediaRecorder && mediaRecorder.state==="recording"){ stopRec(); return; }
 
-  // 1) 文字起こしを「先に」起動する（Androidのマイク競合対策：録音が先だと認識が負ける）
+  // Gemini設定済みなら端末内認識はスキップ（録音開始も速くなる）。
+  // 未設定なら従来どおり認識を先に起動してベストエフォート。
+  const useCloud = !!getGeminiKey();
   recActive = true;
   srFailed = false;
   recTranscript = "";
   liveText.style.display = "block";
-  liveText.textContent = "";
-  recRecog = makeRecognizer(
-    (fin, interim)=>{ recTranscript = fin; if(!srFailed) liveText.textContent = fin + interim; },
-    null,
-    {
-      lang: resolveLang(),
-      keepAlive: ()=>recActive && !srFailed,
-      onError: ev=>{
-        if(["audio-capture","not-allowed","service-not-allowed"].includes(ev.error)){
-          srFailed = true;
-          liveText.textContent = "（この端末では録音との同時文字起こしができないようです。音声は確実に残ります。保存後に ✎ で追記できます）";
+  liveText.textContent = useCloud ? "（録音後にAIが文字起こしします）" : "";
+  if(!useCloud){
+    recRecog = makeRecognizer(
+      (fin, interim)=>{ recTranscript = fin; if(!srFailed) liveText.textContent = fin + interim; },
+      null,
+      {
+        lang: resolveLang(),
+        keepAlive: ()=>recActive && !srFailed,
+        onError: ev=>{
+          if(["audio-capture","not-allowed","service-not-allowed"].includes(ev.error)){
+            srFailed = true;
+            liveText.textContent = "（この端末では録音との同時文字起こしができません。設定でAI文字起こしを有効にできます）";
+          }
         }
       }
-    }
-  );
-  if(recRecog){ try{ recRecog.start(); }catch(e){} }
-  await new Promise(r=>setTimeout(r, 250)); // 認識にマイクを先に掴ませる
+    );
+    if(recRecog){ try{ recRecog.start(); }catch(e){} }
+    await new Promise(r=>setTimeout(r, 250)); // 認識にマイクを先に掴ませる
+  }else{
+    recRecog = null;
+  }
 
   try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:true});
@@ -665,15 +732,22 @@ async function saveRecording(stream, mime){
   const blob = new Blob(chunks, {type:mime});
   const peaks = await computePeaks(blob);
   const now = new Date();
-  await put("recordings", {
+  const rec = {
     id: uid(), ts: now.getTime(), date: dateStr(now),
     blob, mime, dur, peaks, tag: wasWave ? "wave" : null,
     transcript: recTranscript.trim()
-  });
+  };
+  await put("recordings", rec);
   recTime.textContent = "0:00";
   liveText.style.display = "none";
   toast(wasWave ? "🌊 吐き出せました。よくここに来ましたね" : "保存しました");
   recState.textContent = "タップで録音";
+  // AI文字起こし（自動・非同期。失敗しても録音は残っている）
+  if(!rec.transcript && getGeminiKey() && autoTrOn()){
+    transcribeRecording(rec, ()=>{
+      if($("#panel-log").classList.contains("active")) renderTimeline();
+    });
+  }
 }
 
 /* =========================================================
@@ -1041,8 +1115,14 @@ function voiceBubble(r){
     }
   }, "削除");
   const editBtn = iconBtn("✎", ()=>openEdit(), "テキストを編集");
+  const btns = [editBtn, delBtn];
+  if(!r.transcript && getGeminiKey()){
+    btns.unshift(iconBtn("🔤", ()=>{
+      transcribeRecording(r, text=>{ txt.className = "b-text"; txt.textContent = text; });
+    }, "AIで文字起こし"));
+  }
   div.append(metaRow(r.tag==="wave" ? "🌊" : "🎙️",
-    `${when} ・ ${fmtDur(r.dur)}${r.tag==="wave" ? " ・ 波" : ""}`, [editBtn, delBtn]));
+    `${when} ・ ${fmtDur(r.dur)}${r.tag==="wave" ? " ・ 波" : ""}`, btns));
 
   // 声紋
   const cv = document.createElement("canvas");
@@ -1052,7 +1132,12 @@ function voiceBubble(r){
   const txt = document.createElement("div");
   const setTxt = ()=>{
     if(r.transcript){ txt.className = "b-text"; txt.textContent = r.transcript; }
-    else { txt.className = "b-text empty"; txt.textContent = "文字起こしなし — ✎ で追記できます"; }
+    else {
+      txt.className = "b-text empty";
+      txt.textContent = getGeminiKey()
+        ? "文字起こしなし — 🔤 でAI文字起こし、✎ で手入力"
+        : "文字起こしなし — ✎ で追記できます";
+    }
   };
   setTxt();
   div.append(txt);
@@ -1316,6 +1401,19 @@ $("#exportMd").addEventListener("click", async ()=>{
 
 $("#careEditBtn").addEventListener("click", ()=>{ careEditing = !careEditing; renderCare(); });
 
+/* ---------- 設定：AI文字起こし ---------- */
+$("#gemKey").addEventListener("input", ()=>{
+  localStorage.setItem("koebi.gemini", $("#gemKey").value.trim());
+});
+$("#autoTrChip").addEventListener("click", ()=>{
+  localStorage.setItem("koebi.autoTr", autoTrOn() ? "0" : "1");
+  renderTrSettings();
+});
+function renderTrSettings(){
+  $("#gemKey").value = getGeminiKey();
+  $("#autoTrChip").classList.toggle("on", autoTrOn());
+}
+
 /* ---------- 設定：音声入力の言語 ---------- */
 function renderLangChips(){
   $$("#langChips .chip").forEach(c=>c.classList.toggle("on", c.dataset.l === getLangPref()));
@@ -1347,7 +1445,7 @@ $("#installBtn").addEventListener("click", async ()=>{
   $("#todayLabel").textContent = `${now.getMonth()+1}/${now.getDate()}（${WEEK[now.getDay()]}）`;
   await openDB();
   if(navigator.storage && navigator.storage.persist){ try{ await navigator.storage.persist(); }catch(e){} }
-  renderDumps(); renderCare(); renderSlipGrid(); drawMoodChart(); renderShrimp(); renderLangChips();
+  renderDumps(); renderCare(); renderSlipGrid(); drawMoodChart(); renderShrimp(); renderLangChips(); renderTrSettings();
   if("serviceWorker" in navigator){
     try{ await navigator.serviceWorker.register("sw.js"); }catch(e){}
   }
