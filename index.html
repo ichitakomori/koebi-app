@@ -115,9 +115,16 @@ button{font-family:inherit;border:none;cursor:pointer;color:var(--ink)}
 .b-meta .ico{font-size:15px}
 .b-meta .sp{flex:1}
 .b-meta button{background:none;font-size:13px;color:#b9cdc7;padding:4px 6px}
-canvas.vp{width:100%;height:58px;display:block;margin:8px 0 2px;border-radius:8px}
-.b-text{font-size:14px;line-height:1.75;margin-top:6px;word-break:break-word}
+canvas.vp{width:100%;height:64px;display:block;margin:8px 0 2px;border-radius:8px}
+.b-textwrap{display:none;animation:fade .2s ease}
+.bubble.show-text .b-textwrap{display:block}
+.b-text{
+  font-size:14px;line-height:1.75;margin-top:6px;word-break:break-word;
+  user-select:text;-webkit-user-select:text;
+}
 .b-text.empty{color:var(--sub);font-size:12px}
+.copy-row{margin-top:8px}
+.copy-row button{font-size:12px;padding:8px 12px;border-radius:12px;background:var(--bg2)}
 .b-edit textarea{
   width:100%;font-family:inherit;font-size:14px;line-height:1.7;border:none;outline:none;
   background:var(--bg2);border-radius:12px;padding:10px 12px;min-height:70px;resize:vertical;color:var(--ink);margin-top:8px;
@@ -260,7 +267,7 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
 
 <!-- ============ 記録 ============ -->
 <section class="panel" id="panel-log">
-  <p class="hint">声出し・吐き出し・状態の記録が日付順に並びます。タップで再生・編集。</p>
+  <p class="hint">泡＝声の記録（色は話した内容のトーン）。泡をタップで再生、カードをタップで文字を表示（コピー可）。</p>
   <div id="timeline"></div>
 </section>
 
@@ -478,6 +485,44 @@ async function blobToWav16k(blob){
 
 /* モデルは新しい順に試す（提供終了で404になっても自動で次へ） */
 const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash"];
+const TONES = ["joy","calm","idea","sad","tense"];
+
+async function geminiGenerate(parts){
+  const key = getGeminiKey();
+  if(!key) return null;
+  const body = JSON.stringify({ contents: [{ parts }] });
+  let lastStatus = null;
+  for(const model of GEMINI_MODELS){
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` + encodeURIComponent(key),
+      { method:"POST", headers:{"Content-Type":"application/json"}, body }
+    );
+    if(res.status === 404){ lastStatus = 404; continue; } // モデル引退 → 次の候補へ
+    const j = await res.json().catch(()=>null);
+    if(!res.ok){
+      const msg = (j?.error?.message || "").slice(0, 90);
+      throw new Error(`${res.status}: ${msg || "APIエラー"}`);
+    }
+    return (j?.candidates?.[0]?.content?.parts || []).map(p=>p.text || "").join("").trim();
+  }
+  throw new Error(`利用可能なモデルが見つかりません（${lastStatus||404}）`);
+}
+
+function extractJson(s){
+  if(!s) return null;
+  try{
+    const m = String(s).match(/\{[\s\S]*\}/);
+    return m ? JSON.parse(m[0]) : null;
+  }catch(e){ return null; }
+}
+function cleanMeta(j){
+  const tone = TONES.includes(j?.tone) ? j.tone : null;
+  const keywords = Array.isArray(j?.keywords)
+    ? j.keywords.map(k=>String(k).trim()).filter(Boolean).slice(0,3) : [];
+  return {tone, keywords};
+}
+
+const TONE_GUIDE = `tone の基準: joy=明るい・嬉しい / calm=落ち着き・日常 / idea=アイデア・ひらめき / sad=沈み・疲れ / tense=緊張・不安・イライラ`;
 
 async function transcribeBlob(blob, mime){
   const key = getGeminiKey();
@@ -495,40 +540,52 @@ async function transcribeBlob(blob, mime){
     fr.readAsDataURL(sendBlob);
   });
   const langHint = resolveLang() === "en-US" ? "English" : "日本語";
-  const body = JSON.stringify({
-    contents: [{ parts: [
-      { text: `この音声を文字起こししてください。話されている言語（主に${langHint}）のまま、本文のみを出力してください。句読点は適切に補い、前置きや説明は不要です。` },
-      { inline_data: { mime_type: sendMime, data: b64 } }
-    ]}]
-  });
-  let lastStatus = null, lastMsg = "";
-  for(const model of GEMINI_MODELS){
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` + encodeURIComponent(key),
-      { method:"POST", headers:{"Content-Type":"application/json"}, body }
-    );
-    if(res.status === 404){ lastStatus = 404; continue; } // モデル引退 → 次の候補へ
-    const j = await res.json().catch(()=>null);
-    if(!res.ok){
-      lastStatus = res.status;
-      lastMsg = (j?.error?.message || "").slice(0, 90);
-      throw new Error(`${res.status}: ${lastMsg || "APIエラー"}`);
+  const out = await geminiGenerate([
+    { text: `この音声を文字起こしして内容を分析し、次のJSONだけを出力してください（コードフェンスや説明は不要）:
+{"text":"文字起こし全文（話された言語＝主に${langHint}のまま、句読点を補う）","tone":"joy|calm|idea|sad|tense のどれか1つ","keywords":["内容を象徴する短い言葉を1〜3個（各6文字以内）"]}
+${TONE_GUIDE}` },
+    { inline_data: { mime_type: sendMime, data: b64 } }
+  ]);
+  if(!out) return null;
+  const j = extractJson(out);
+  if(j && j.text) return Object.assign({text: String(j.text).trim()}, cleanMeta(j));
+  return {text: out, tone: null, keywords: []};   // JSONで返らなかった場合は全文をテキスト扱い
+}
+
+/* 文字起こし済みの録音に、あとから色とキーワードをつける */
+async function analyzeRecording(r){
+  toast("泡に色をつけています…");
+  try{
+    const out = await geminiGenerate([{ text:
+`次の音声日記の内容を分析し、JSONだけを出力してください:
+{"tone":"joy|calm|idea|sad|tense のどれか1つ","keywords":["内容を象徴する短い言葉を1〜3個（各6文字以内）"]}
+${TONE_GUIDE}
+---
+${r.transcript}` }]);
+    const meta = cleanMeta(extractJson(out) || {});
+    if(meta.tone || meta.keywords.length){
+      r.tone = meta.tone; r.keywords = meta.keywords;
+      await put("recordings", r);
+      toast("泡に色がつきました");
+    }else{
+      toast("分析結果を読み取れませんでした");
     }
-    const text = (j?.candidates?.[0]?.content?.parts || []).map(p=>p.text || "").join("").trim();
-    return text || null;
+  }catch(err){
+    toast("分析に失敗しました: " + String(err.message||"").slice(0,50));
   }
-  throw new Error(`利用可能なモデルが見つかりません（${lastStatus||404}）`);
 }
 
 async function transcribeRecording(r, onDone){
   toast("文字起こし中…");
   try{
-    const text = await transcribeBlob(r.blob, r.mime);
-    if(text){
-      r.transcript = text;
+    const res = await transcribeBlob(r.blob, r.mime);
+    if(res && res.text){
+      r.transcript = res.text;
+      if(res.tone) r.tone = res.tone;
+      if(res.keywords && res.keywords.length) r.keywords = res.keywords;
       await put("recordings", r);
       toast("文字起こしができました");
-      if(onDone) onDone(text);
+      if(onDone) onDone(res.text);
     }else{
       toast("文字起こし結果が空でした");
     }
@@ -625,15 +682,27 @@ function drawPeaks(cv, peaks, prog, opts){
   const jitter = Array.from({length:n}, ()=>({y:(rnd()-0.5), r:0.7 + rnd()*0.6}));
   ctx.clearRect(0,0,W,H);
   const colW = W/n;
-  const pal = opts.wave
-    ? {on:"#7fb6cc", off:"rgba(127,182,204,.16)", edge:"rgba(127,182,204,.40)"}
-    : {on:"#f2a196", off:"rgba(242,161,150,.14)", edge:"rgba(242,161,150,.40)"};
+  // トーン（話した内容の色味）が最優先。なければ波タグ、通常は桜色
+  const TONE_PAL = {
+    joy:  {on:"#f2a196", off:"rgba(242,161,150,.14)", edge:"rgba(242,161,150,.40)"},
+    calm: {on:"#86bfae", off:"rgba(134,191,174,.14)", edge:"rgba(134,191,174,.42)"},
+    idea: {on:"#e0b04f", off:"rgba(224,176,79,.15)",  edge:"rgba(224,176,79,.45)"},
+    sad:  {on:"#92a7cf", off:"rgba(146,167,207,.15)", edge:"rgba(146,167,207,.45)"},
+    tense:{on:"#b48fb5", off:"rgba(180,143,181,.15)", edge:"rgba(180,143,181,.45)"},
+  };
+  const pal = (opts.tone && TONE_PAL[opts.tone])
+    ? TONE_PAL[opts.tone]
+    : opts.wave
+      ? {on:"#7fb6cc", off:"rgba(127,182,204,.16)", edge:"rgba(127,182,204,.40)"}
+      : TONE_PAL.joy;
+  const bubblesGeom = [];
   for(let i=0;i<n;i++){
     const v = Math.max(0.10, src(i));
     const r = Math.max(2*devicePixelRatio, (0.12 + 0.88*v) * H * 0.26 * jitter[i].r);
     const x = i*colW + colW/2;
     const y = H/2 + jitter[i].y * (H - 2*r) * 0.85;
     const played = (prog||0) > 0 && (i/n) <= prog;
+    bubblesGeom.push({x, y, r});
     ctx.beginPath();
     ctx.arc(x, y, r, 0, 7);
     if(played){
@@ -651,6 +720,38 @@ function drawPeaks(cv, peaks, prog, opts){
       ctx.strokeStyle = pal.edge;
       ctx.stroke();
     }
+  }
+  // キーワードが大きな泡の中に棲む
+  const kws = (opts.keywords || []).filter(Boolean).slice(0,3);
+  if(kws.length){
+    const sorted = [...bubblesGeom].sort((a,b)=>b.r-a.r);
+    const chosen = [];
+    for(const b of sorted){
+      if(chosen.length >= kws.length) break;
+      if(chosen.every(c=>Math.abs(c.x - b.x) > W/5)) chosen.push(b);
+    }
+    chosen.sort((a,b)=>a.x-b.x);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    chosen.forEach((b,i)=>{
+      const kw = String(kws[i]).slice(0,6);
+      const minR = 15*devicePixelRatio;
+      const rr = Math.max(b.r, minR);
+      const fs = Math.max(9*devicePixelRatio, Math.min(rr*0.62, 13*devicePixelRatio));
+      ctx.font = `bold ${fs}px sans-serif`;
+      // 言葉がカードからはみ出さないよう、泡ごと内側に寄せる
+      const half = Math.max(rr, ctx.measureText(kw).width/2 + 4*devicePixelRatio);
+      const tx = Math.max(half, Math.min(W - half, b.x));
+      const ty = Math.max(rr, Math.min(H - rr, b.y));
+      if(b.r < minR || tx !== b.x || ty !== b.y){
+        // 言葉が入るように、泡をそっとふくらませて置き直す
+        ctx.beginPath(); ctx.arc(tx, ty, rr, 0, 7);
+        ctx.fillStyle = pal.off; ctx.fill();
+        ctx.lineWidth = Math.max(1, devicePixelRatio);
+        ctx.strokeStyle = pal.edge; ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(74,90,87,.66)";
+      ctx.fillText(kw, tx, ty);
+    });
   }
 }
 
@@ -1217,10 +1318,12 @@ function voiceBubble(r){
   }, "削除");
   const editBtn = iconBtn("✎", ()=>openEdit(), "テキストを編集");
   const btns = [editBtn, delBtn];
-  if(!r.transcript && getGeminiKey()){
-    btns.unshift(iconBtn("🔤", ()=>{
-      transcribeRecording(r, text=>{ txt.className = "b-text"; txt.textContent = text; });
-    }, "AIで文字起こし"));
+  if(getGeminiKey()){
+    if(!r.transcript){
+      btns.unshift(iconBtn("🔤", ()=>{ transcribeRecording(r, ()=>renderTimeline()); }, "AIで文字起こし"));
+    }else if(!r.tone){
+      btns.unshift(iconBtn("✨", ()=>{ analyzeRecording(r).then(()=>renderTimeline()); }, "泡に色をつける"));
+    }
   }
   div.append(metaRow(r.tag==="wave" ? "🌊" : "🎙️",
     `${when} ・ ${fmtDur(r.dur)}${r.tag==="wave" ? " ・ 波" : ""}`, btns));
@@ -1230,22 +1333,38 @@ function voiceBubble(r){
   cv.className = "vp";
   div.append(cv);
 
+  // アート表示が基本。バブルをタップするとテキスト（コピー可）が開く
+  const txtWrap = document.createElement("div");
+  txtWrap.className = "b-textwrap";
   const txt = document.createElement("div");
+  const copyRow = document.createElement("div");
+  copyRow.className = "copy-row";
+  copyRow.append(mkBtn("📋 コピー", async ()=>{
+    try{ await navigator.clipboard.writeText(r.transcript || ""); toast("コピーしました"); }
+    catch(e){ toast("コピーできませんでした"); }
+  }));
   const setTxt = ()=>{
-    if(r.transcript){ txt.className = "b-text"; txt.textContent = r.transcript; }
+    if(r.transcript){ txt.className = "b-text"; txt.textContent = r.transcript; copyRow.style.display = ""; }
     else {
       txt.className = "b-text empty";
       txt.textContent = getGeminiKey()
         ? "文字起こしなし — 🔤 でAI文字起こし、✎ で手入力"
         : "文字起こしなし — ✎ で追記できます";
+      copyRow.style.display = "none";
     }
   };
   setTxt();
-  div.append(txt);
+  txtWrap.append(txt, copyRow);
+  div.append(txtWrap);
+  div.addEventListener("click", ev=>{
+    if(ev.target.closest("canvas") || ev.target.closest("button") || ev.target.closest("textarea")) return;
+    div.classList.toggle("show-text");
+  });
 
   // 描画（peaks が無ければ遅延計算して保存）
   let peaks = r.peaks;
-  const paint = prog => drawPeaks(cv, peaks || fallbackPeaks(r.id), prog, {seed:r.id, wave:r.tag==="wave"});
+  const paint = prog => drawPeaks(cv, peaks || fallbackPeaks(r.id), prog,
+    {seed:r.id, wave:r.tag==="wave", tone:r.tone, keywords:r.keywords});
   requestAnimationFrame(()=>paint(0));
   if(!peaks){
     computePeaks(r.blob).then(p=>{ if(p){ peaks = p; r.peaks = p; put("recordings", r); paint(0); } });
@@ -1269,6 +1388,7 @@ function voiceBubble(r){
   // テキスト編集
   function openEdit(){
     if(div.querySelector(".b-edit")) return;
+    div.classList.add("show-text");
     txt.style.display = "none";
     const ed = document.createElement("div");
     ed.className = "b-edit";
