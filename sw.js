@@ -1,5 +1,5 @@
 /* Koebi service worker — アプリの殻をキャッシュしてオフラインでも開けるようにする */
-const CACHE = "koebi-v0.6.3";
+const CACHE = "koebi-v0.7.0";
 const ASSETS = [
   "./",
   "./index.html",
