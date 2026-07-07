@@ -116,21 +116,35 @@ button{font-family:inherit;border:none;cursor:pointer;color:var(--ink)}
   box-shadow:var(--shadow);
 }
 .post-bub{
-  position:absolute;border-radius:50%;
-  background:radial-gradient(circle at 35% 28%, rgba(255,255,255,.96), rgba(255,255,255,.55));
+  position:absolute;border-radius:50%;overflow:hidden;
+  background:radial-gradient(circle at 35% 28%, rgba(255,255,255,.96), rgba(255,255,255,.5));
   box-shadow:0 10px 26px rgba(110,150,135,.25);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
   padding:12px;text-align:center;cursor:pointer;
-  animation:floaty 13s ease-in-out infinite;
+  animation:floaty 14s ease-in-out infinite;
 }
-.post-bub img{height:16px;width:auto;margin-bottom:2px}
-.post-bub canvas{width:78%;height:26px;display:block}
-.post-bub .pb-text{
-  font-size:9.5px;line-height:1.5;color:var(--ink);opacity:.85;
-  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
-  max-width:88%;
+.pb-bg{position:absolute;inset:0;width:100%;height:100%}
+.pb-user{
+  position:relative;display:flex;align-items:center;gap:5px;
+  background:rgba(255,255,255,.85);border-radius:999px;padding:3px 10px;
+  font-size:8.5px;color:var(--sub);box-shadow:0 2px 6px rgba(110,150,135,.18);
 }
-.post-bub .pb-when{font-size:8.5px;color:var(--sub);margin-top:1px}
+.pb-user img{height:13px;width:auto}
+.pb-kw{
+  position:relative;background:none;font-size:12.5px;font-weight:700;
+  color:var(--ink);opacity:.88;line-height:1.5;max-width:86%;padding:4px;
+}
+.pb-when{position:relative;font-size:8.5px;color:var(--sub)}
+#seaSheet{
+  display:none;position:fixed;left:0;right:0;bottom:0;z-index:30;
+  background:var(--card);border-radius:24px 24px 0 0;
+  box-shadow:0 -6px 30px rgba(90,140,125,.25);
+  padding:22px 22px calc(22px + env(safe-area-inset-bottom));
+  max-width:560px;margin:0 auto;max-height:60vh;overflow-y:auto;
+}
+#seaSheet.show{display:block;animation:up2 .25s ease}
+#seaSheet button{width:100%;margin-top:14px;padding:12px;border-radius:14px;background:var(--bg2);font-size:13px}
+@keyframes up2{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
 #tagEditToggle{margin-top:10px;background:none;color:var(--sub);font-size:12px;padding:6px 12px}
 #wave{width:100%;height:56px;margin-top:6px}
 #liveText{
@@ -369,31 +383,35 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
 <section class="panel" id="panel-share">
   <p class="hint" id="shareHint">こえびの海 — 声の泡がただよっています。いまはあなたの泡だけ。<br>将来ここに、いろんな人のつぶやきの泡が流れてきます。</p>
   <div id="sea"></div>
+  <div id="seaSheet">
+    <div class="b-text" id="seaSheetText"></div>
+    <button id="seaSheetClose">閉じる</button>
+  </div>
 </section>
 
 <!-- ============ ケア ============ -->
 <section class="panel" id="panel-care">
   <div class="card">
-    <h2>今の状態</h2>
-    <p class="mood-label">気分</p>
+    <h2 id="careStateT">今の状態</h2>
+    <p class="mood-label" id="moodLbl">気分</p>
     <div class="mood-row" id="moodRow">
       <button data-v="-2">😞</button><button data-v="-1">😕</button><button data-v="0">😐</button><button data-v="1">🙂</button><button data-v="2">😄</button>
     </div>
-    <p class="mood-label">エネルギー（− 枯渇 〜 ＋ 過剰）</p>
+    <p class="mood-label" id="energyLbl">エネルギー（− 枯渇 〜 ＋ 過剰）</p>
     <div class="mood-row" id="energyRow">
       <button data-v="-2">🥀</button><button data-v="-1">🪫</button><button data-v="0">🔋</button><button data-v="1">⚡</button><button data-v="2">🌋</button>
     </div>
     <canvas id="moodChart"></canvas>
-    <p class="hint" style="text-align:center;margin-top:6px">直近14日間 — 線＝気分、棒＝エネルギー（上＝過剰／下＝枯渇）</p>
+    <p class="hint" style="text-align:center;margin-top:6px" id="chartCap">直近14日間 — 線＝気分、棒＝エネルギー（上＝過剰／下＝枯渇）</p>
   </div>
   <div class="card">
-    <h2>今日のセルフケア <button id="careEditBtn" title="項目を編集">✎</button></h2>
+    <h2><span id="careTodayT">今日のセルフケア</span> <button id="careEditBtn" title="項目を編集">✎</button></h2>
     <div id="careList"></div>
-    <p class="care-note">できた分だけで十分です。</p>
+    <p class="care-note" id="careNoteT">できた分だけで十分です。</p>
   </div>
   <div class="card">
-    <h2>正直ログ <button id="slipEditBtn" title="項目を編集">✎</button></h2>
-    <p class="hint">「やってしまった」の記録もワンタップで。責めるためではなく、波のパターンを知るために。</p>
+    <h2><span id="slipT2">正直ログ</span> <button id="slipEditBtn" title="項目を編集">✎</button></h2>
+    <p class="hint" id="slipHintT">「やってしまった」の記録もワンタップで。責めるためではなく、波のパターンを知るために。</p>
     <div class="slip-grid" id="slipGrid"></div>
     <div id="slipEditBox"></div>
   </div>
@@ -410,7 +428,7 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
       <div class="stage-sub" id="stageTotal" style="margin-top:6px"></div>
       <div class="progress"><i id="stageBar"></i></div>
     </div>
-    <p class="care-note">連続記録は数えません。記録した日の合計だけで育ちます。<br>休んでも減りません。</p>
+    <p class="care-note" id="growthNote">連続記録は数えません。記録した日の合計だけで育ちます。<br>休んでも減りません。</p>
   </div>
   <div class="card">
     <h2 id="settingsTitle">設定</h2>
@@ -425,18 +443,18 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
       <button class="chip" data-l="ja">日本語</button>
       <button class="chip" data-l="en">English</button>
     </div>
-    <p class="hint" style="margin:8px 0 0">自動＝端末の言語設定に合わせます。発話ごとの自動判別は端末の音声認識が対応していないため、英語で話す日は English に切り替えてください。</p>
-    <p class="hint" style="margin:16px 0 4px"><b>AI文字起こし（Gemini）</b></p>
+    <p class="hint" style="margin:8px 0 0" id="srNote">自動＝端末の言語設定に合わせます。発話ごとの自動判別は端末の音声認識が対応していないため、英語で話す日は English に切り替えてください。</p>
+    <p class="hint" style="margin:16px 0 4px"><b id="aiT">AI文字起こし（Gemini）</b></p>
     <input id="gemKey" type="password" placeholder="Gemini APIキー（AIza…）" autocomplete="off">
     <div class="chips" style="margin:8px 0 4px">
       <button class="chip" id="autoTrChip">録音後に自動で文字起こし</button>
     </div>
-    <p class="hint" style="margin:8px 0 0">
+    <p class="hint" style="margin:8px 0 0" id="gemNote">
       録音と同時の文字起こしができない機種向け（この機種も該当）。録音した音声を、<b>文字起こしのときだけ</b> Google Gemini に送ります。キーはこの端末にのみ保存。<br>
       キーの無料発行：<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey</a> →「Create API key」→ コピーして上に貼り付け。
     </p>
     <p class="hint" id="gemCountLabel" style="margin:10px 0 0"></p>
-    <p class="hint" style="margin:16px 0 4px"><b id="backupTitle">データのバックアップ</b></p>
+    <p class="hint" style="margin:16px 0 4px"><b id="bkT">データのバックアップ</b></p>
     <button class="exp-btn" id="backupBtn">💾 全データを1ファイルに書き出す</button>
     <button class="exp-btn" id="restoreBtn">📥 バックアップから復元する</button>
     <input type="file" id="restoreFile" accept=".json,application/json" style="display:none">
@@ -805,6 +823,15 @@ function seededRand(seedStr){
   for(const c of seedStr){ h = (h ^ c.charCodeAt(0)) * 16777619 >>> 0; }
   return ()=>{ h = (h * 1103515245 + 12345) >>> 0; return (h % 10000) / 10000; };
 }
+/* トーン（話した内容の色味）のパレット：泡アート共通 */
+const TONE_PAL = {
+  joy:  {on:"#f2a196", off:"rgba(242,161,150,.14)", edge:"rgba(242,161,150,.40)"},
+  calm: {on:"#86bfae", off:"rgba(134,191,174,.14)", edge:"rgba(134,191,174,.42)"},
+  idea: {on:"#e0b04f", off:"rgba(224,176,79,.15)",  edge:"rgba(224,176,79,.45)"},
+  sad:  {on:"#92a7cf", off:"rgba(146,167,207,.15)", edge:"rgba(146,167,207,.45)"},
+  tense:{on:"#b48fb5", off:"rgba(180,143,181,.15)", edge:"rgba(180,143,181,.45)"},
+};
+
 function drawPeaks(cv, peaks, prog, opts){
   opts = opts || {};
   const ctx = cv.getContext("2d");
@@ -821,14 +848,6 @@ function drawPeaks(cv, peaks, prog, opts){
   const jitter = Array.from({length:n}, ()=>({y:(rnd()-0.5), r:0.7 + rnd()*0.6}));
   ctx.clearRect(0,0,W,H);
   const colW = W/n;
-  // トーン（話した内容の色味）が最優先。なければ波タグ、通常は桜色
-  const TONE_PAL = {
-    joy:  {on:"#f2a196", off:"rgba(242,161,150,.14)", edge:"rgba(242,161,150,.40)"},
-    calm: {on:"#86bfae", off:"rgba(134,191,174,.14)", edge:"rgba(134,191,174,.42)"},
-    idea: {on:"#e0b04f", off:"rgba(224,176,79,.15)",  edge:"rgba(224,176,79,.45)"},
-    sad:  {on:"#92a7cf", off:"rgba(146,167,207,.15)", edge:"rgba(146,167,207,.45)"},
-    tense:{on:"#b48fb5", off:"rgba(180,143,181,.15)", edge:"rgba(180,143,181,.45)"},
-  };
   const pal = (opts.tone && TONE_PAL[opts.tone]) ? TONE_PAL[opts.tone] : TONE_PAL.joy;
   const bubblesGeom = [];
   for(let i=0;i<n;i++){
@@ -928,20 +947,20 @@ function drawArcText(ctx, text, cx, cy, rr, fs){
 
 /* ---------- 録音タグ（色＝AIトーン、形＝タグ） ---------- */
 const TAG_DEFAULTS = [
-  {k:"idea", e:"💡", t:"アイデア",     form:"burst"},
-  {k:"wave", e:"🌊", t:"波",           form:"swell"},
-  {k:"log",  e:"📝", t:"記録",         form:"steady"},
-  {k:"talk", e:"💭", t:"ただ語る",     form:"drift"},
-  {k:"neta", e:"🎵", t:"創作ネタ",     form:"dance"},
-  {k:"seed", e:"🌱", t:"アイデアの芽", form:"sprout"},
-  {k:"moya", e:"🌫️", t:"もやもや",     form:"fog"},
+  {k:"idea", e:"💡", t:{ja:"アイデア",     en:"Idea"},       form:"burst"},
+  {k:"wave", e:"🌊", t:{ja:"波",           en:"Wave"},       form:"swell"},
+  {k:"log",  e:"📝", t:{ja:"記録",         en:"Note"},       form:"steady"},
+  {k:"talk", e:"💭", t:{ja:"ただ語る",     en:"Just talk"},  form:"drift"},
+  {k:"neta", e:"🎵", t:{ja:"創作ネタ",     en:"Material"},   form:"dance"},
+  {k:"seed", e:"🌱", t:{ja:"アイデアの芽", en:"Seedling"},   form:"sprout"},
+  {k:"moya", e:"🌫️", t:{ja:"もやもや",     en:"Hazy mind"},  form:"fog"},
 ];
 function tagItems(){
   try{
     const t = JSON.parse(localStorage.getItem("koebi.tags") || "");
-    if(Array.isArray(t) && t.length) return t;
+    if(Array.isArray(t) && t.length) return t.map(x=>({...x, t:dT(x.t)}));
   }catch(e){}
-  return TAG_DEFAULTS;
+  return TAG_DEFAULTS.map(x=>({...x, t:dT(x.t)}));
 }
 function saveTagItems(list){
   if(list) localStorage.setItem("koebi.tags", JSON.stringify(list));
@@ -1363,20 +1382,22 @@ async function drawMoodChart(){
 /* =========================================================
    セルフケア
    ========================================================= */
+/* デフォルト項目は日英両対応：未編集なら表示言語に追従、編集済みならそのまま */
+const dT = t => typeof t === "string" ? t : (t[uiLangPref()] || t.ja);
 const CARE_DEFAULTS = [
-  {k:"eat",   t:"🍚 何か食べた"},
-  {k:"water", t:"🫖 水分をとった"},
-  {k:"sleep", t:"🌙 寝る準備を整えた"},
-  {k:"room",  t:"🧺 部屋のことを1つ片付けた"},
-  {k:"air",   t:"🌿 外の空気を吸った"},
-  {k:"bath",  t:"🛁 入浴・シャワー"},
+  {k:"eat",   t:{ja:"🍚 何か食べた",            en:"🍚 Ate something"}},
+  {k:"water", t:{ja:"🫖 水分をとった",          en:"🫖 Drank water"}},
+  {k:"sleep", t:{ja:"🌙 寝る準備を整えた",      en:"🌙 Got ready for bed"}},
+  {k:"room",  t:{ja:"🧺 部屋のことを1つ片付けた", en:"🧺 Tidied one thing"}},
+  {k:"air",   t:{ja:"🌿 外の空気を吸った",      en:"🌿 Got some fresh air"}},
+  {k:"bath",  t:{ja:"🛁 入浴・シャワー",        en:"🛁 Bath / shower"}},
 ];
 function careItems(){
   try{
     const c = JSON.parse(localStorage.getItem("koebi.care") || "");
-    if(Array.isArray(c) && c.length) return c;
+    if(Array.isArray(c) && c.length) return c.map(x=>({...x, t:dT(x.t)}));
   }catch(e){}
-  return CARE_DEFAULTS;
+  return CARE_DEFAULTS.map(x=>({...x, t:dT(x.t)}));
 }
 function saveCareItems(list){
   if(list) localStorage.setItem("koebi.care", JSON.stringify(list));
@@ -1423,8 +1444,8 @@ async function renderCare(){
     const row = document.createElement("div");
     row.className = "care-add";
     const inp = document.createElement("input");
-    inp.placeholder = "新しい項目（絵文字もOK）";
-    const add = mkBtn("追加", ()=>{
+    inp.placeholder = T("careAddPh");
+    const add = mkBtn(T("add"), ()=>{
       const v = inp.value.trim();
       if(!v) return;
       saveCareItems([...careItems(), {k:"c"+uid(), t:v}]);
@@ -1434,8 +1455,8 @@ async function renderCare(){
     const row2 = document.createElement("div");
     row2.className = "care-add";
     row2.append(
-      mkBtn("標準の項目に戻す", ()=>{ saveCareItems(null); renderCare(); }),
-      mkBtn("編集を終える", ()=>{ careEditing = false; renderCare(); })
+      mkBtn(T("resetStd"), ()=>{ saveCareItems(null); renderCare(); }),
+      mkBtn(T("editEnd"), ()=>{ careEditing = false; renderCare(); })
     );
     box.append(row, row2);
   }
@@ -1445,26 +1466,26 @@ async function renderCare(){
    正直ログ（ワンタップ）
    ========================================================= */
 const SLIP_DEFAULTS = [
-  {k:"alc",     e:"🍺", t:"飲酒"},
-  {k:"doom",    e:"📱", t:"スマホ・SNS沼"},
-  {k:"night",   e:"🌙", t:"夜ふかし"},
-  {k:"spend",   e:"💸", t:"衝動買い・課金"},
-  {k:"morning", e:"⏰", t:"朝起きれない"},
-  {k:"game",    e:"🎮", t:"ゲーム"},
-  {k:"nidone",  e:"🛌", t:"二度寝"},
-  {k:"procr",   e:"🌀", t:"先延ばし"},
+  {k:"alc",     e:"🍺", t:{ja:"飲酒",           en:"Drinking"}},
+  {k:"doom",    e:"📱", t:{ja:"スマホ・SNS沼",  en:"Doomscrolling"}},
+  {k:"night",   e:"🌙", t:{ja:"夜ふかし",       en:"Up too late"}},
+  {k:"spend",   e:"💸", t:{ja:"衝動買い・課金", en:"Impulse buying"}},
+  {k:"morning", e:"⏰", t:{ja:"朝起きれない",   en:"Couldn't get up"}},
+  {k:"game",    e:"🎮", t:{ja:"ゲーム",         en:"Gaming"}},
+  {k:"nidone",  e:"🛌", t:{ja:"二度寝",         en:"Snoozed again"}},
+  {k:"procr",   e:"🌀", t:{ja:"先延ばし",       en:"Procrastinated"}},
 ];
 // 旧バージョンで記録した項目の表示用
 const LEGACY_SLIPS = [
-  {k:"binge", e:"🍜", t:"食べすぎ"},
-  {k:"skip",  e:"🕳️", t:"予定を飛ばした"},
+  {k:"binge", e:"🍜", t:{ja:"食べすぎ", en:"Overate"}},
+  {k:"skip",  e:"🕳️", t:{ja:"予定を飛ばした", en:"Skipped plans"}},
 ];
 function slipItems(){
   try{
     const s = JSON.parse(localStorage.getItem("koebi.slips") || "");
-    if(Array.isArray(s) && s.length) return s;
+    if(Array.isArray(s) && s.length) return s.map(x=>({...x, t:dT(x.t)}));
   }catch(e){}
-  return SLIP_DEFAULTS;
+  return SLIP_DEFAULTS.map(x=>({...x, t:dT(x.t)}));
 }
 function saveSlipItems(list){
   if(list) localStorage.setItem("koebi.slips", JSON.stringify(list));
@@ -1472,8 +1493,8 @@ function saveSlipItems(list){
 }
 // 削除・改名された項目でも過去の記録は正しく表示する
 const slipDef = k => slipItems().find(x=>x.k===k)
-  || SLIP_DEFAULTS.find(x=>x.k===k)
-  || LEGACY_SLIPS.find(x=>x.k===k);
+  || SLIP_DEFAULTS.map(x=>({...x, t:dT(x.t)})).find(x=>x.k===k)
+  || LEGACY_SLIPS.map(x=>({...x, t:dT(x.t)})).find(x=>x.k===k);
 
 let slipEditing = false;
 
@@ -1503,7 +1524,7 @@ function renderSlipGrid(){
     const row = document.createElement("div");
     row.className = "care-add";
     const inp = document.createElement("input");
-    inp.placeholder = "新しい項目（例：🍕 深夜ピザ）";
+    inp.placeholder = T("slipAddPh");
     const add = mkBtn("追加", ()=>{
       const v = inp.value.trim();
       if(!v) return;
@@ -1520,8 +1541,8 @@ function renderSlipGrid(){
     const row2 = document.createElement("div");
     row2.className = "care-add";
     row2.append(
-      mkBtn("標準の項目に戻す", ()=>{ saveSlipItems(null); renderSlipGrid(); }),
-      mkBtn("編集を終える", ()=>{ slipEditing = false; renderSlipGrid(); })
+      mkBtn(T("resetStd"), ()=>{ saveSlipItems(null); renderSlipGrid(); }),
+      mkBtn(T("editEnd"), ()=>{ slipEditing = false; renderSlipGrid(); })
     );
     editBox.append(row, row2);
   }
@@ -1986,9 +2007,7 @@ $("#autoTrChip").addEventListener("click", ()=>{
 function renderGemCount(){
   const el = $("#gemCountLabel");
   if(!el) return;
-  el.innerHTML = getGeminiKey()
-    ? `📊 今日のAI使用回数：<b>${geminiCountToday()}</b> 回（無料枠の目安：1日1,500回・毎日 日本時間の夕方16〜17時ごろリセット）`
-    : "";
+  el.innerHTML = getGeminiKey() ? T("gemCnt")(geminiCountToday()) : "";
 }
 function renderTrSettings(){
   $("#gemKey").value = getGeminiKey();
@@ -2032,7 +2051,7 @@ ja:{
   save:"保存", cancel:"キャンセル", updated:"更新しました", recorded:"記録しました",
   noTrKey:"文字起こしなし — 🔤 でAI文字起こし、✎ 編集で手入力", noTr:"文字起こしなし — ✎ 編集で追記できます",
   trIng:"文字起こし中…", trOk:"文字起こしができました",
-  shareHint:"こえびの海 — 声の泡がただよっています。いまはあなたの泡だけ。<br>将来ここに、いろんな人のつぶやきの泡が流れてきます。",
+  shareHint:"こえびの海 — 声の泡がただよっています。キーワードをタップで再生、泡のほかの場所で全文。<br>いまはあなたの泡だけ。将来ここに、いろんな人のつぶやきの泡が流れてきます（ユーザー表示はモック）。",
   seaEmpty:"まだ泡がありません。声出しから最初のひと声を。",
   stages:[["卵","はじまりの気配。"],["稚エビ","生まれたて。最初の一歩。"],["小エビ","少しエビらしくなってきた。"],["若エビ","一週間分の声が積もった。"],["成エビ","ヒゲも堂々としてきた。"],["主エビ","この海の主。あなたの声の海。"],["伝説のエビ","続いた日々の、確かな証。"]],
   recDays:n=>`（記録 ${n} 日）`, nextIn:(name,n)=>`次の「${name}」まで、あと ${n} 日分`, maxed:"ここまでの記録、すべてが証です。",
@@ -2042,6 +2061,19 @@ ja:{
   exportTitle:"書き出し", exportHint:"記録全体を Markdown で書き出せます（Obsidian にそのまま置ける形式）。",
   exportBtn:"📄 Markdown で書き出す", installBtn:"📲 ホーム画面に追加する",
   settingsTitle:"設定", aboutTitle:"このアプリについて",
+  careStateT:"今の状態", moodLbl:"気分", energyLbl:"エネルギー（− 枯渇 〜 ＋ 過剰）",
+  chartCap:"直近14日間 — 線＝気分、棒＝エネルギー（上＝過剰／下＝枯渇）",
+  careTodayT:"今日のセルフケア", careNoteT:"できた分だけで十分です。",
+  slipT2:"正直ログ", slipHintT:"「やってしまった」の記録もワンタップで。責めるためではなく、波のパターンを知るために。",
+  growthNote:"連続記録は数えません。記録した日の合計だけで育ちます。<br>休んでも減りません。",
+  careAddPh:"新しい項目（絵文字もOK）", slipAddPh:"新しい項目（例：🍕 深夜ピザ）",
+  srNote:"自動＝端末の言語設定に合わせます。発話ごとの自動判別は端末の音声認識が対応していないため、英語で話す日は English に切り替えてください。",
+  aiT:"AI文字起こし（Gemini）", autoTrL:"録音後に自動で文字起こし", srAuto:"自動",
+  gemNote:`録音と同時の文字起こしができない機種向け。録音した音声を、<b>文字起こしのときだけ</b> Google Gemini に送ります。キーはこの端末にのみ保存。<br>キーの無料発行：<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey</a> →「Create API key」→ コピーして上に貼り付け。`,
+  gemCnt:n=>`📊 今日のAI使用回数：<b>${n}</b> 回（無料枠の目安：1日1,500回・毎日 日本時間の夕方16〜17時ごろリセット）`,
+  bkT:"データのバックアップ", bkBtn:"💾 全データを1ファイルに書き出す", rsBtn:"📥 バックアップから復元する",
+  bkNote:"音声を含む全記録を1つのファイルにまとめます（APIキーは含めません）。共有シートからDrive等に保存できます。<br>※保存先フォルダを常時変更する設定は、ブラウザアプリの制約上できません（ネイティブ版で対応予定）。",
+  seaUser:"あなた", seaClose:"閉じる",
   aboutBody:`「声（koe）」×「日（bi・日記の日）」、そして小さなエビ（小エビ）。日本語の言葉遊びから生まれた名前です。<br>
 データはこの端末内に保存されます。AI文字起こしを有効にした場合のみ、対象の音声を Google Gemini に送信します。<br>
 つらいときは、信頼できる人や専門家にも頼ってください。`,
@@ -2067,7 +2099,7 @@ en:{
   save:"Save", cancel:"Cancel", updated:"Updated", recorded:"Logged",
   noTrKey:"No transcript — 🔤 for AI transcription, ✎ to type", noTr:"No transcript — add via ✎ Edit",
   trIng:"Transcribing…", trOk:"Transcription ready",
-  shareHint:"The Koebi Sea — voice bubbles drift by. Only yours for now.<br>Someday, everyone's bubbles will float through here.",
+  shareHint:"The Koebi Sea — voice bubbles drift by. Tap keywords to play, tap elsewhere on a bubble for the full text.<br>Only yours for now — someday everyone's bubbles will float here (user display is a mock).",
   seaEmpty:"No bubbles yet. Record your first voice.",
   stages:[["Egg","A sign of beginnings."],["Hatchling","Newly born. First step."],["Little Shrimp","Getting shrimp-like."],["Young Shrimp","A week of voice piled up."],["Grown Shrimp","Proud whiskers now."],["Sea Master","Master of this sea of your voice."],["Legendary Shrimp","Proof of the days that continued."]],
   recDays:n=>` (${n} days recorded)`, nextIn:(name,n)=>`${n} more days to "${name}"`, maxed:"Everything recorded so far is your proof.",
@@ -2077,6 +2109,19 @@ en:{
   exportTitle:"Export", exportHint:"Export all records as Markdown (drops straight into Obsidian).",
   exportBtn:"📄 Export as Markdown", installBtn:"📲 Add to home screen",
   settingsTitle:"Settings", aboutTitle:"About this app",
+  careStateT:"Current state", moodLbl:"Mood", energyLbl:"Energy (− drained 〜 + wired)",
+  chartCap:"Last 14 days — line = mood, bars = energy (up = wired / down = drained)",
+  careTodayT:"Today's self-care", careNoteT:"Whatever you managed is enough.",
+  slipT2:"Honest log", slipHintT:"One tap to log the \"oops\". Not to blame yourself — to learn your waves.",
+  growthNote:"No streaks here. It grows by total days recorded.<br>Resting never sets it back.",
+  careAddPh:"New item (emoji OK)", slipAddPh:"New item (e.g. 🍕 midnight pizza)",
+  srNote:"Auto = follows your device language. Per-utterance detection isn't supported, so switch manually on English days.",
+  aiT:"AI transcription (Gemini)", autoTrL:"Auto-transcribe after recording", srAuto:"Auto",
+  gemNote:`For devices that can't transcribe while recording. Audio is sent to Google Gemini <b>only when transcribing</b>. The key is stored on this device only.<br>Free key: <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey</a> → "Create API key" → paste above.`,
+  gemCnt:n=>`📊 AI calls today: <b>${n}</b> (free tier ≈ 1,500/day, resets around midnight PT)`,
+  bkT:"Data backup", bkBtn:"💾 Export all data as one file", rsBtn:"📥 Restore from backup",
+  bkNote:"Bundles all records incl. audio into one file (API key excluded). Save to Drive etc. via the share sheet.<br>※ A persistent custom save folder isn't possible in a browser app (planned for the native version).",
+  seaUser:"you", seaClose:"Close",
   aboutBody:`<b>Koebi</b> is Japanese wordplay: <i>koe</i> (声, voice) × <i>bi</i> (日, day — as in diary), making a "voice diary". It also sounds like <i>ko-ebi</i> (小エビ) — a little shrimp. The name stays in Japanese on purpose.<br>
 Your data stays on this device. Audio is sent to Google Gemini only when AI transcription is enabled.<br>
 When things get heavy, please also lean on people you trust or professionals.`,
@@ -2098,12 +2143,24 @@ function applyLang(){
   $("#panel-log > .hint").innerHTML = T("hintLog");
   $("#shareHint").innerHTML = T("shareHint");
   $("#settingsTitle").textContent = T("settingsTitle");
+  ["careStateT","moodLbl","energyLbl","chartCap","careTodayT","careNoteT","slipT2","aiT","bkT"]
+    .forEach(id=>{ const el = $("#"+id); if(el) el.textContent = T(id); });
+  ["slipHintT","growthNote","srNote","gemNote","bkNote"]
+    .forEach(id=>{ const el = $("#"+id); if(el) el.innerHTML = T(id); });
+  $("#autoTrChip").textContent = T("autoTrL");
+  const autoChip = $('#langChips .chip[data-l="auto"]');
+  if(autoChip) autoChip.textContent = T("srAuto");
+  $("#backupBtn").textContent = T("bkBtn");
+  $("#restoreBtn").textContent = T("rsBtn");
+  renderGemCount();
+  renderCare(); renderSlipGrid();
   $("#exportTitle").textContent = T("exportTitle");
   $("#exportHint").textContent = T("exportHint");
   $("#exportMd").textContent = T("exportBtn");
   $("#installBtn").textContent = T("installBtn");
   $("#aboutTitle").textContent = T("aboutTitle");
   $("#aboutBody").innerHTML = T("aboutBody");
+  $("#seaSheetClose").textContent = T("seaClose");
   $$("#uiLangChips .chip").forEach(c=>c.classList.toggle("on", c.dataset.ul === uiLangPref()));
   renderTagEditBox();
 }
@@ -2176,7 +2233,30 @@ $("#restoreFile").addEventListener("change", e=>{
 /* =========================================================
    こえびの海（シェア・SNSプレビュー：いまは自分の泡だけ）
    ========================================================= */
-let seaAudio = null;
+let seaAudio = null, seaPlayingId = null;
+
+/* 大バブルの中を満たす気泡（未再生スタイル・トーン色）——泡のなかの泡 */
+function seaBubbleBg(cv, r){
+  const size = cv.width;
+  const ctx = cv.getContext("2d");
+  const pal = (r.tone && TONE_PAL[r.tone]) ? TONE_PAL[r.tone] : TONE_PAL.joy;
+  const rnd = seededRand("sea-" + r.id);
+  const peaks = r.peaks || fallbackPeaks(r.id);
+  const R0 = size / 2;
+  ctx.clearRect(0, 0, size, size);
+  for(let i = 0; i < 26; i++){
+    const v = Math.max(0.12, peaks[Math.floor(rnd() * peaks.length)]);
+    const br = (0.045 + 0.115 * v) * size * (0.6 + rnd() * 0.7);
+    const a = rnd() * Math.PI * 2;
+    const rad = Math.sqrt(rnd()) * (R0 - br - 4);
+    const x = R0 + Math.cos(a) * rad, y = R0 + Math.sin(a) * rad;
+    ctx.beginPath(); ctx.arc(x, y, br, 0, 7);
+    ctx.fillStyle = pal.off; ctx.fill();
+    ctx.lineWidth = Math.max(1, devicePixelRatio * 0.8);
+    ctx.strokeStyle = pal.edge; ctx.stroke();
+  }
+}
+
 async function renderShare(){
   const sea = $("#sea");
   sea.innerHTML = "";
@@ -2189,39 +2269,54 @@ async function renderShare(){
   const rnd = seededRand("koebi-sea");
   recs.forEach((r,i)=>{
     const [sx,sy] = slots[i % slots.length];
-    const size = 118 + Math.min(64, r.dur || 10) + Math.round(rnd() * 18);
+    const size = 128 + Math.min(58, r.dur || 10) + Math.round(rnd() * 16);
     const div = document.createElement("div");
     div.className = "post-bub";
     div.style.width = div.style.height = size + "px";
     div.style.left = `calc(${sx}% - ${size/2}px)`;
     div.style.top  = `calc(${sy}% - ${size/2}px)`;
-    div.style.animationDelay = (-(rnd()*13)).toFixed(1) + "s";
-    div.style.animationDuration = (12 + rnd()*6).toFixed(1) + "s";
-    div.innerHTML = `<img src="icons/shrimp.png" alt="">`;
-    const cvm = document.createElement("canvas");
-    div.append(cvm);
-    const txt = document.createElement("div");
-    txt.className = "pb-text";
-    txt.textContent = r.transcript || "";
+    div.style.animationDelay = (-(rnd()*14)).toFixed(1) + "s";
+    div.style.animationDuration = (13 + rnd()*6).toFixed(1) + "s";
+    // 背景：気泡が満ちる
+    const bg = document.createElement("canvas");
+    bg.className = "pb-bg";
+    div.append(bg);
+    // ユーザー小バブル（モック）
+    const user = document.createElement("div");
+    user.className = "pb-user";
+    user.innerHTML = `<img src="icons/shrimp.png" alt=""><span>koebi・${T("seaUser")}</span>`;
+    // キーワード（タップで再生/停止）
+    const kw = document.createElement("button");
+    kw.className = "pb-kw";
+    const kws = (r.keywords || []).filter(Boolean);
+    kw.textContent = kws.length ? kws.join(" / ")
+      : (r.transcript ? r.transcript.slice(0, 12) + "…" : "…");
+    kw.addEventListener("click", ev=>{
+      ev.stopPropagation();
+      if(seaPlayingId === r.id && seaAudio && !seaAudio.paused){ seaAudio.pause(); return; }
+      if(seaAudio && !seaAudio.paused) seaAudio.pause();
+      seaAudio = new Audio(URL.createObjectURL(r.blob));
+      seaPlayingId = r.id;
+      seaAudio.play().catch(()=>{});
+    });
     const when = document.createElement("div");
     when.className = "pb-when";
     when.textContent = `${r.date.slice(5).replace("-","/")} ${timeStr(new Date(r.ts))}`;
-    div.append(txt, when);
+    div.append(user, kw, when);
+    // 泡のほかの場所タップ → 文字起こし全文
+    div.addEventListener("click", ()=>{
+      $("#seaSheetText").textContent = r.transcript || (getGeminiKey() ? T("noTrKey") : T("noTr"));
+      $("#seaSheet").classList.add("show");
+    });
     sea.append(div);
     requestAnimationFrame(()=>{
-      cvm.width = (cvm.clientWidth || 120) * devicePixelRatio;
-      cvm.height = (cvm.clientHeight || 26) * devicePixelRatio;
-      cvm._sized = true;
-      const tdd = r.tag ? tagDef(r.tag) : null;
-      drawPeaks(cvm, r.peaks || fallbackPeaks(r.id), 1, {seed:r.id, tone:r.tone, form:(tdd && tdd.form) || null});
-    });
-    div.addEventListener("click", ()=>{
-      if(seaAudio && !seaAudio.paused){ seaAudio.pause(); seaAudio = null; return; }
-      seaAudio = new Audio(URL.createObjectURL(r.blob));
-      seaAudio.play().catch(()=>{});
+      const px = (div.clientWidth || size) * devicePixelRatio;
+      bg.width = px; bg.height = px;
+      seaBubbleBg(bg, r);
     });
   });
 }
+$("#seaSheetClose").addEventListener("click", ()=>$("#seaSheet").classList.remove("show"));
 
 /* ---------- PWA インストール ---------- */
 let deferredPrompt = null;
