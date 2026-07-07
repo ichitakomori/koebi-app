@@ -92,18 +92,45 @@ button{font-family:inherit;border:none;cursor:pointer;color:var(--ink)}
   line-height:1.5;white-space:pre-line;min-height:16px;
 }
 .orbit-bubble{
-  position:absolute;width:80px;height:80px;border-radius:50%;
+  position:absolute;border-radius:50%;
   transform:translate(-50%,-50%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
   font-size:10px;color:var(--ink);
   box-shadow:0 8px 22px rgba(110,150,135,.22);
-  animation:floaty 6s ease-in-out infinite alternate;
+  animation:floaty 11s ease-in-out infinite;   /* 負のdelayで途中相から開始＝初動ジャンプなし */
   transition:opacity .3s ease;
 }
 .orbit-bubble .e{font-size:24px}
 .orbit-bubble.editing{outline:2px dashed var(--danger);color:var(--danger)}
 .orbit.rec .orbit-bubble{opacity:.12;pointer-events:none}
-@keyframes floaty{from{margin-top:-4px}to{margin-top:4px}}
+@keyframes floaty{
+  0%,100%{margin-top:0;margin-left:0}
+  30%{margin-top:-6px;margin-left:3px}
+  65%{margin-top:3px;margin-left:-4px}
+}
+
+/* ===== こえびの海（シェア） ===== */
+#sea{
+  position:relative;height:64vh;min-height:430px;border-radius:20px;overflow:hidden;
+  background:linear-gradient(180deg,#eaf6f1 0%,#dcefe7 55%,#cfe8df 100%);
+  box-shadow:var(--shadow);
+}
+.post-bub{
+  position:absolute;border-radius:50%;
+  background:radial-gradient(circle at 35% 28%, rgba(255,255,255,.96), rgba(255,255,255,.55));
+  box-shadow:0 10px 26px rgba(110,150,135,.25);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:12px;text-align:center;cursor:pointer;
+  animation:floaty 13s ease-in-out infinite;
+}
+.post-bub img{height:16px;width:auto;margin-bottom:2px}
+.post-bub canvas{width:78%;height:26px;display:block}
+.post-bub .pb-text{
+  font-size:9.5px;line-height:1.5;color:var(--ink);opacity:.85;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+  max-width:88%;
+}
+.post-bub .pb-when{font-size:8.5px;color:var(--sub);margin-top:1px}
 #tagEditToggle{margin-top:10px;background:none;color:var(--sub);font-size:12px;padding:6px 12px}
 #wave{width:100%;height:56px;margin-top:6px}
 #liveText{
@@ -250,9 +277,12 @@ nav{
 }
 nav button{
   background:none;display:flex;flex-direction:column;align-items:center;gap:2px;
-  font-size:10px;color:var(--sub);width:64px;padding:4px 0;border-radius:12px;
+  font-size:9.5px;color:var(--sub);flex:1;max-width:70px;padding:4px 0;border-radius:12px;
 }
-nav button .i{font-size:22px;filter:grayscale(1);opacity:.55;transition:all .15s}
+nav button em{font-style:normal}
+nav button .i{font-size:22px;filter:grayscale(1);opacity:.55;transition:all .15s;position:relative;height:24px;display:flex;align-items:center}
+nav button .i img{height:21px;width:auto;display:block}
+nav button .i.nav-rec b{position:absolute;left:-9px;bottom:-3px;font-size:11px}
 nav button.on{color:var(--accent)}
 nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
 
@@ -335,6 +365,12 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
   <div id="timeline"></div>
 </section>
 
+<!-- ============ シェア（こえびの海・SNSプレビュー） ============ -->
+<section class="panel" id="panel-share">
+  <p class="hint" id="shareHint">こえびの海 — 声の泡がただよっています。いまはあなたの泡だけ。<br>将来ここに、いろんな人のつぶやきの泡が流れてきます。</p>
+  <div id="sea"></div>
+</section>
+
 <!-- ============ ケア ============ -->
 <section class="panel" id="panel-care">
   <div class="card">
@@ -377,8 +413,13 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
     <p class="care-note">連続記録は数えません。記録した日の合計だけで育ちます。<br>休んでも減りません。</p>
   </div>
   <div class="card">
-    <h2>設定</h2>
-    <p class="hint" style="margin-bottom:4px">音声入力・文字起こしの言語</p>
+    <h2 id="settingsTitle">設定</h2>
+    <p class="hint" style="margin-bottom:4px" id="uiLangLabel">アプリの表示言語 / App language</p>
+    <div class="chips" id="uiLangChips" style="margin:8px 0 12px">
+      <button class="chip" data-ul="ja">日本語</button>
+      <button class="chip" data-ul="en">English</button>
+    </div>
+    <p class="hint" style="margin-bottom:4px" id="srLangLabel">音声入力・文字起こしの言語</p>
     <div class="chips" id="langChips" style="margin:8px 0 4px">
       <button class="chip" data-l="auto">自動</button>
       <button class="chip" data-l="ja">日本語</button>
@@ -395,19 +436,26 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
       キーの無料発行：<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey</a> →「Create API key」→ コピーして上に貼り付け。
     </p>
     <p class="hint" id="gemCountLabel" style="margin:10px 0 0"></p>
+    <p class="hint" style="margin:16px 0 4px"><b id="backupTitle">データのバックアップ</b></p>
+    <button class="exp-btn" id="backupBtn">💾 全データを1ファイルに書き出す</button>
+    <button class="exp-btn" id="restoreBtn">📥 バックアップから復元する</button>
+    <input type="file" id="restoreFile" accept=".json,application/json" style="display:none">
+    <p class="hint" id="backupNote" style="margin:8px 0 0">
+      音声を含む全記録を1つのファイルにまとめます（APIキーは含めません）。共有シートからDrive等に保存できます。<br>
+      ※保存先フォルダを常時変更する設定は、ブラウザアプリの制約上できません（ネイティブ版で対応予定）。
+    </p>
   </div>
   <div class="card">
-    <h2>書き出し</h2>
-    <p class="hint">記録全体を Markdown で書き出せます（Obsidian にそのまま置ける形式）。</p>
+    <h2 id="exportTitle">書き出し</h2>
+    <p class="hint" id="exportHint">記録全体を Markdown で書き出せます（Obsidian にそのまま置ける形式）。</p>
     <button class="exp-btn" id="exportMd">📄 Markdown で書き出す</button>
     <button id="installBtn">📲 ホーム画面に追加する</button>
   </div>
   <div class="card">
-    <h2>このアプリについて</h2>
+    <h2 id="aboutTitle">このアプリについて</h2>
     <p class="hint">
-      Koebi（こえび）<span id="verLabel">v0.4.2</span> — nomacod<br>
-      データはこの端末内に保存されます。AI文字起こしを有効にした場合のみ、文字起こし対象の音声を Google Gemini に送信します。<br>
-      つらいときは、信頼できる人や専門家にも頼ってください。
+      <b>Koebi</b>（こえび）<span id="verLabel">v0.8</span> — nomacod<br>
+      <span id="aboutBody"></span>
     </p>
   </div>
 </section>
@@ -415,11 +463,12 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
 </main>
 
 <nav>
-  <button class="on" data-p="rec"><span class="i">🎙️</span>声出し</button>
-  <button data-p="dump"><span class="i">🫧</span>吐き出し</button>
-  <button data-p="log"><span class="i">🗓️</span>記録</button>
-  <button data-p="care"><span class="i">🩷</span>ケア</button>
-  <button data-p="shrimp"><span class="i">🦐</span>エビ</button>
+  <button class="on" data-p="rec"><span class="i nav-rec"><img src="icons/shrimp.png" alt=""><b>🎙️</b></span><em data-nav="rec">声出し</em></button>
+  <button data-p="dump"><span class="i">🫧</span><em data-nav="dump">吐き出し</em></button>
+  <button data-p="log"><span class="i">🗓️</span><em data-nav="log">記録</em></button>
+  <button data-p="share"><span class="i">🌐</span><em data-nav="share">シェア</em></button>
+  <button data-p="care"><span class="i">🩷</span><em data-nav="care">ケア</em></button>
+  <button data-p="shrimp"><span class="i"><img class="nav-img" src="icons/shrimp.png" alt=""></span><em data-nav="shrimp">こえび</em></button>
 </nav>
 
 <div id="toast"></div>
@@ -503,6 +552,7 @@ $$("nav button").forEach(b=>{
     if(b.dataset.p==="care"){ renderCare(); drawMoodChart(); }
     if(b.dataset.p==="shrimp") renderShrimp();
     if(b.dataset.p==="dump") renderDumps();
+    if(b.dataset.p==="share") renderShare();
   });
 });
 
@@ -665,7 +715,7 @@ ${r.transcript}` }]);
 }
 
 async function transcribeRecording(r, onDone){
-  toast("文字起こし中…");
+  toast(T("trIng"));
   try{
     const res = await transcribeBlob(r.blob, r.mime);
     if(res && res.text){
@@ -673,7 +723,7 @@ async function transcribeRecording(r, onDone){
       if(res.tone) r.tone = res.tone;
       if(res.keywords && res.keywords.length) r.keywords = res.keywords;
       await put("recordings", r);
-      toast("文字起こしができました");
+      toast(T("trOk"));
       if(onDone) onDone(res.text);
     }else{
       toast("文字起こし結果が空でした");
@@ -901,15 +951,15 @@ const tagDef = k => tagItems().find(x=>x.k===k) || TAG_DEFAULTS.find(x=>x.k===k)
 
 /* 消しゴム：2タップ式削除（1回目で武装→3秒で解除） */
 function eraserBtn(onDelete, small){
-  const base = small ? "🧽" : "🧽 削除";
   const b = document.createElement("button");
-  b.textContent = base;
+  const base = ()=> small ? "🧽" : T("del");
+  b.textContent = base();
   b.addEventListener("click", ev=>{
     ev.stopPropagation();
     if(b.classList.contains("armed")){ onDelete(); return; }
     b.classList.add("armed");
-    b.textContent = small ? "🧽 もう一度" : "🧽 もう一度タップで削除";
-    setTimeout(()=>{ b.classList.remove("armed"); b.textContent = base; }, 3000);
+    b.textContent = small ? (uiLangPref()==="en" ? "🧽 again" : "🧽 もう一度") : T("delAgain");
+    setTimeout(()=>{ b.classList.remove("armed"); b.textContent = base(); }, 3000);
   });
   return b;
 }
@@ -931,20 +981,28 @@ const ORBIT_COLORS = ["#fde3dd","#dff0ea","#fbeed3","#e6e4f4","#ddebf5","#fde7ee
 
 function renderOrbit(){
   orbitEl.querySelectorAll(".orbit-bubble").forEach(b=>b.remove());
-  const items = tagItems();   // 録音は中央タップに集約（マイク泡は廃止）
+  const items = tagItems();   // 録音は中央タップに集約
   const N = items.length;
   const W = orbitEl.clientWidth || 330;
-  const C = W / 2, R = C - 46;
+  const C = W / 2;
+  const rnd = seededRand("koebi-orbit-" + N);   // 有機的だが毎回同じ配置
   items.forEach((s, i)=>{
-    const a = -Math.PI/2 + i * 2 * Math.PI / N;
+    // 本物の泡のように：サイズも軌道半径も角度も少しずつ揺らぐ
+    const size = 62 + Math.round(rnd() * 26);                     // 62〜88px
+    const aj = (rnd() - 0.5) * 0.22;                              // 角度ゆらぎ
+    const a = -Math.PI/2 + i * 2 * Math.PI / N + aj;
+    const gap = 16 + rnd() * 12;                                  // 中心からの余白
+    const R = Math.min(74 + size/2 + gap, C - size/2 - 2);        // 中央(半径74)+余白、はみ出しは抑制
     const b = document.createElement("button");
     b.className = "orbit-bubble" + (tagEditing && s.k ? " editing" : "");
+    b.style.width = b.style.height = size + "px";
     b.style.left = (C + R * Math.cos(a)).toFixed(1) + "px";
     b.style.top  = (C + R * Math.sin(a)).toFixed(1) + "px";
-    // 中央と同じ、縁がぼやけた泡（ハイライト入りグラデーション）
+    b.style.fontSize = (size >= 76 ? 10 : 9) + "px";
     b.style.background = `radial-gradient(circle at 35% 30%, rgba(255,255,255,.9), ${ORBIT_COLORS[i % ORBIT_COLORS.length]})`;
-    b.style.animationDelay = (i * 0.9) + "s";
-    b.style.animationDuration = (5.5 + (i % 4) * 0.8) + "s";
+    // 負のdelay＝アニメの途中相から開始（最初に全員が同時に動く不自然さを消す）
+    b.style.animationDelay = (-(i * 2.3 + rnd() * 4)).toFixed(1) + "s";
+    b.style.animationDuration = (10 + rnd() * 5).toFixed(1) + "s";
     b.innerHTML = `<span class="e">${esc(s.e)}</span>${tagEditing && s.k ? "✕ 削除" : esc(s.t)}`;
     b.addEventListener("click", ()=>{
       if(tagEditing){
@@ -961,13 +1019,13 @@ function renderOrbit(){
 
 function renderTagEditBox(){
   tagEditBox.innerHTML = "";
-  $("#tagEditToggle").textContent = tagEditing ? "✔ 編集を終える" : "✎ タグを編集";
+  $("#tagEditToggle").textContent = tagEditing ? T("tagEditEnd") : T("tagEdit");
   if(!tagEditing) return;
   const row = document.createElement("div");
   row.className = "care-add";
   const inp = document.createElement("input");
-  inp.placeholder = "新しいタグ（例：🌙 夢）";
-  const add = mkBtn("追加", ()=>{
+  inp.placeholder = T("tagPh");
+  const add = mkBtn(T("add"), ()=>{
     const v = inp.value.trim();
     if(!v) return;
     const parts = v.split(/\s+/);
@@ -981,7 +1039,7 @@ function renderTagEditBox(){
   row.append(inp, add);
   const row2 = document.createElement("div");
   row2.className = "care-add";
-  row2.append(mkBtn("標準のタグに戻す", ()=>{ saveTagItems(null); renderOrbit(); }));
+  row2.append(mkBtn(T("resetStd"), ()=>{ saveTagItems(null); renderOrbit(); }));
   tagEditBox.append(row, row2);
 }
 $("#tagEditToggle").addEventListener("click", ()=>{
@@ -1039,10 +1097,8 @@ recBtn.addEventListener("click", async ()=>{
     $("#tagEditToggle").style.display = "none";
     const td = pendingTagK ? tagDef(pendingTagK) : null;
     recState.textContent = td
-      ? (pendingTagK === "wave"
-          ? "🌊 波ごとどうぞ\nタップで終了"
-          : `${td.e} ${td.t}\nタップで終了`)
-      : "録音中\nタップで終了";
+      ? (pendingTagK === "wave" ? T("waveOn") : `${td.e} ${td.t}\n${T("recOn").split("\n")[1]}`)
+      : T("recOn");
     recTimer = setInterval(()=>{ recTime.textContent = fmtDur((Date.now()-recStart)/1000); }, 250);
 
     audioCtx = new (window.AudioContext||window.webkitAudioContext)();
@@ -1059,7 +1115,7 @@ recBtn.addEventListener("click", async ()=>{
     orbitEl.classList.remove("rec");
     tagEditBox.style.display = "";
     $("#tagEditToggle").style.display = "";
-    recState.textContent = "マイク使用不可\n権限を確認";
+    recState.textContent = T("micNg");
   }
 });
 
@@ -1115,8 +1171,8 @@ async function saveRecording(stream, mime){
   await put("recordings", rec);
   recTime.textContent = "0:00";
   liveText.style.display = "none";
-  toast(wasTag === "wave" ? "🌊 吐き出せました。よくここに来ましたね" : "保存しました");
-  recState.textContent = "タップで録音";
+  toast(wasTag === "wave" ? T("waveSaved") : T("saved"));
+  recState.textContent = T("tap");
   // AI文字起こし（自動・非同期。失敗しても録音は残っている）
   if(!rec.transcript && getGeminiKey() && autoTrOn()){
     transcribeRecording(rec, ()=>{
@@ -1169,7 +1225,7 @@ $("#dumpSave").addEventListener("click", async ()=>{
   }
   dumpText.value = "";
   dumpText.style.height = "auto";
-  toast(parts.length>1 ? `${parts.length}件を置きました` : "置きました");
+  toast(parts.length>1 ? T("tPutN")(parts.length) : T("tPut"));
   renderDumps();
 });
 
@@ -1186,8 +1242,8 @@ async function renderDumps(){
   const box = $("#dumpList");
   if(!all.length){
     box.innerHTML = `<div class="dump-empty">${
-      dumpFilter==="open" ? "今は空です。"
-      : dumpFilter==="done" ? "完了したものがここに並びます。" : "手放したものの記録です。"
+      dumpFilter==="open" ? T("dumpEmptyOpen")
+      : dumpFilter==="done" ? T("dumpEmptyDone") : T("dumpEmptyRel")
     }</div>`;
     return;
   }
@@ -1200,11 +1256,11 @@ async function renderDumps(){
     const acts = document.createElement("div");
     acts.className = "acts";
     if(dumpFilter==="open"){
-      const bd = mkBtn("✔ 完了", async ()=>{ e.status="done"; await put("entries",e); fade(div); toast("完了。ひとつ軽くなりました"); });
-      const br = mkBtn("🌊 手放す", async ()=>{ e.status="released"; await put("entries",e); fade(div); toast("手放しました"); });
+      const bd = mkBtn(T("actDone"), async ()=>{ e.status="done"; await put("entries",e); fade(div); toast(T("tDone")); });
+      const br = mkBtn(T("actRel"), async ()=>{ e.status="released"; await put("entries",e); fade(div); toast(T("tRel")); });
       acts.append(bd,br);
     }else{
-      const bb = mkBtn("↩ 戻す", async ()=>{ e.status="open"; await put("entries",e); fade(div); });
+      const bb = mkBtn(T("actBack"), async ()=>{ e.status="open"; await put("entries",e); fade(div); });
       acts.append(bb);
     }
     div.append(acts);
@@ -1242,7 +1298,7 @@ async function saveMood(){
   await put("entries", {id, type:"mood", ts:now, date:dateStr(new Date(now)), mood:moodSel, energy2:energySel});
   moodEntryId = id;
   moodEntryTs = now;
-  toast(reuse ? "更新しました" : "記録しました");
+  toast(reuse ? T("updated") : T("recorded"));
   drawMoodChart();
 }
 
@@ -1488,7 +1544,7 @@ async function renderTimeline(){
   const tl = $("#timeline");
   tl.innerHTML = "";
   if(!items.length){
-    tl.innerHTML = `<div class="card" style="text-align:center;color:var(--sub);font-size:13px;line-height:2">まだ記録がありません。<br>最初のひと声から始まります。</div>`;
+    tl.innerHTML = `<div class="card" style="text-align:center;color:var(--sub);font-size:13px;line-height:2">${T("tlEmpty")}</div>`;
     return;
   }
   let curDay = "";
@@ -1559,14 +1615,14 @@ function voiceBubble(r){
   const txt = document.createElement("div");
   const copyRow = document.createElement("div");
   copyRow.className = "copy-row";
-  const copyBtn = mkBtn("📋 コピー", async ()=>{
-    try{ await navigator.clipboard.writeText(r.transcript || ""); toast("コピーしました"); }
-    catch(e){ toast("コピーできませんでした"); }
+  const copyBtn = mkBtn(T("copy"), async ()=>{
+    try{ await navigator.clipboard.writeText(r.transcript || ""); toast(T("copied")); }
+    catch(e){ toast("…"); }
   });
   copyRow.append(
     copyBtn,
-    mkBtn("✎ 編集", ()=>openEdit()),
-    mkBtn("📤 共有", async ()=>{
+    mkBtn(T("edit"), ()=>openEdit()),
+    mkBtn(T("share"), async ()=>{
       try{
         const ext = (r.mime||"audio/webm").includes("mp4") ? "m4a" : "webm";
         const f = new File([r.blob], `koebi_${r.date}_${timeStr(new Date(r.ts)).replace(":","")}.${ext}`, {type:(r.mime||"audio/webm").split(";")[0]});
@@ -1579,15 +1635,13 @@ function voiceBubble(r){
         }
       }catch(e){}
     }),
-    eraserBtn(async ()=>{ await del("recordings", r.id); toast("削除しました"); renderTimeline(); })
+    eraserBtn(async ()=>{ await del("recordings", r.id); toast(T("delDone")); renderTimeline(); })
   );
   const setTxt = ()=>{
     if(r.transcript){ txt.className = "b-text"; txt.textContent = r.transcript; copyBtn.style.display = ""; }
     else {
       txt.className = "b-text empty";
-      txt.textContent = getGeminiKey()
-        ? "文字起こしなし — 🔤 でAI文字起こし、✎ 編集で手入力"
-        : "文字起こしなし — ✎ 編集で追記できます";
+      txt.textContent = getGeminiKey() ? T("noTrKey") : T("noTr");
       copyBtn.style.display = "none";
     }
   };
@@ -1693,13 +1747,13 @@ function voiceBubble(r){
     const ta = document.createElement("textarea");
     ta.value = r.transcript || "";
     const row = document.createElement("div"); row.className = "row";
-    const save = document.createElement("button"); save.className = "pri"; save.textContent = "保存";
-    const cancel = document.createElement("button"); cancel.textContent = "キャンセル";
+    const save = document.createElement("button"); save.className = "pri"; save.textContent = T("save");
+    const cancel = document.createElement("button"); cancel.textContent = T("cancel");
     save.addEventListener("click", async ()=>{
       r.transcript = ta.value.trim();
       await put("recordings", r);
       ed.remove(); setTxt(); txt.style.display = "";
-      toast("保存しました");
+      toast(T("saved"));
     });
     cancel.addEventListener("click", ()=>{ ed.remove(); txt.style.display = ""; });
     row.append(save, cancel); ed.append(ta, row); div.append(ed);
@@ -1712,7 +1766,7 @@ function dumpBubble(e){
   const div = document.createElement("div");
   div.className = "bubble";
   const mark = e.status==="done" ? "✔" : e.status==="released" ? "🌊" : "🫧";
-  div.append(metaRow(mark, `${timeStr(new Date(e.ts))} 吐き出しBOX`));
+  div.append(metaRow(mark, `${timeStr(new Date(e.ts))} ${T("dumpBox")}`));
   const t = document.createElement("div");
   t.className = "b-text"; t.textContent = e.text;
   div.append(t);
@@ -1723,7 +1777,7 @@ function moodBubble(e){
   const div = document.createElement("div");
   div.className = "bubble";
   const editBtn = iconBtn("✎", ()=>openEdit(), "編集");
-  div.append(metaRow("🩷", `${timeStr(new Date(e.ts))} 状態の記録`, [editBtn]));
+  div.append(metaRow("🩷", `${timeStr(new Date(e.ts))} ${T("stateRec")}`, [editBtn]));
 
   const body = document.createElement("div");
   const setBody = ()=>{
@@ -1782,7 +1836,7 @@ function careBubble(e){
   div.className = "bubble";
   if(!done.length && dateStr(new Date()) !== e.date) return null;
   const editBtn = iconBtn("✎", ()=>toggleEdit(), "編集");
-  div.append(metaRow("🌱", `セルフケア`, [editBtn]));
+  div.append(metaRow("🌱", T("selfCare"), [editBtn]));
   const body = document.createElement("div");
   body.className = "b-text";
   const setBody = ()=>{
@@ -1819,8 +1873,8 @@ function slipBubble(e){
   const s = slipDef(e.k) || {e:"・", t:e.k};
   const div = document.createElement("div");
   div.className = "bubble slip";
-  div.append(metaRow(s.e, `${timeStr(new Date(e.ts))} 正直ログ — ${s.t}`,
-    [eraserBtn(async ()=>{ await del("entries", e.id); toast("削除しました"); renderTimeline(); }, true)]));
+  div.append(metaRow(s.e, `${timeStr(new Date(e.ts))} ${T("honest")} — ${s.t}`,
+    [eraserBtn(async ()=>{ await del("entries", e.id); toast(T("delDone")); renderTimeline(); }, true)]));
   return div;
 }
 
@@ -1855,15 +1909,15 @@ async function renderShrimp(){
   const recs = await getAll("recordings");
   const ents = await getAll("entries");
   const totalMin = Math.round(recs.reduce((s,r)=>s+(r.dur||0),0)/60);
-  $("#stageTotal").textContent =
-    `これまで — 声 ${recs.length} 本（計 ${totalMin} 分）・記録 ${ents.length + recs.length} 件`;
+  $("#stageTotal").textContent = T("totals")(recs.length, totalMin, ents.length + recs.length);
   let st = STAGES[0];
   for(const s of STAGES){ if(days>=s.min) st = s; }
   const idx = STAGES.indexOf(st);
   const next = STAGES[idx+1] || null;
-  $("#stageName").textContent = `${st.name}（記録 ${days} 日）`;
-  $("#stageSub").innerHTML = st.sub + "<br>" +
-    (next ? `次の「${next.name}」まで、あと ${next.min-days} 日分` : "ここまでの記録、すべてが証です。");
+  const SN = T("stages");
+  $("#stageName").textContent = SN[idx][0] + T("recDays")(days);
+  $("#stageSub").innerHTML = SN[idx][1] + "<br>" +
+    (next ? T("nextIn")(SN[idx+1][0], next.min - days) : T("maxed"));
   const prog = next ? (days - st.min) / (next.min - st.min) : 1;
   $("#stageBar").style.width = Math.round(prog*100)+"%";
   const svg = $("#shrimpSvg"), img = $("#shrimpImg");
@@ -1953,6 +2007,222 @@ $("#langChips").addEventListener("click", e=>{
   toast(b.dataset.l === "auto" ? "端末の言語に合わせます" : `音声入力: ${b.textContent}`);
 });
 
+/* =========================================================
+   UI言語（日/英）
+   ========================================================= */
+const STR = {
+ja:{
+  nav:{rec:"声出し",dump:"吐き出し",log:"記録",share:"シェア",care:"ケア",shrimp:"こえび"},
+  tap:"タップで録音", recOn:"録音中\nタップで終了", waveOn:"🌊 波ごとどうぞ\nタップで終了",
+  micNg:"マイク使用不可\n権限を確認", saved:"保存しました", waveSaved:"🌊 吐き出せました。よくここに来ましたね",
+  hintRec:"アイデアも、記録も、感情も、ただ語るのも。<br>声に出したものは、ぜんぶここに積もっていきます。<br><br>音声はこの端末内に保存されます。<br>AI文字起こしを有効にした場合のみ、その音声を Gemini に送信します。",
+  tagEdit:"✎ タグを編集", tagEditEnd:"✔ 編集を終える", tagPh:"新しいタグ（例：🌙 夢）",
+  add:"追加", resetStd:"標準に戻す", editEnd:"編集を終える",
+  dumpHead:"🫧 <b>吐き出しBOX</b><br>「やらなきゃ」も、もやもやも、そのまま置いていく場所。<br>整理は不要、出すだけで十分。マイナスを、ゼロに。",
+  dumpPh:"声でもテキストでも", dumpSave:"置いていく",
+  chipOpen:"置いてある", chipDone:"完了", chipRel:"手放した",
+  dumpEmptyOpen:"今は空です。", dumpEmptyDone:"完了したものがここに並びます。", dumpEmptyRel:"手放したものの記録です。",
+  actDone:"✔ 完了", actRel:"🌊 手放す", actBack:"↩ 戻す",
+  tPut:"置きました", tPutN:n=>`${n}件を置きました`, tDone:"完了。ひとつ軽くなりました", tRel:"手放しました",
+  hintLog:"泡＝声の記録（色は話した内容のトーン）。泡をタップで再生、カードをタップで文字を表示（コピー可）。",
+  tlEmpty:"まだ記録がありません。<br>最初のひと声から始まります。",
+  dumpBox:"吐き出しBOX", stateRec:"状態の記録", selfCare:"セルフケア", honest:"正直ログ",
+  copy:"📋 コピー", edit:"✎ 編集", share:"📤 共有", copied:"コピーしました",
+  del:"🧽 削除", delAgain:"🧽 もう一度タップで削除", delDone:"削除しました",
+  save:"保存", cancel:"キャンセル", updated:"更新しました", recorded:"記録しました",
+  noTrKey:"文字起こしなし — 🔤 でAI文字起こし、✎ 編集で手入力", noTr:"文字起こしなし — ✎ 編集で追記できます",
+  trIng:"文字起こし中…", trOk:"文字起こしができました",
+  shareHint:"こえびの海 — 声の泡がただよっています。いまはあなたの泡だけ。<br>将来ここに、いろんな人のつぶやきの泡が流れてきます。",
+  seaEmpty:"まだ泡がありません。声出しから最初のひと声を。",
+  stages:[["卵","はじまりの気配。"],["稚エビ","生まれたて。最初の一歩。"],["小エビ","少しエビらしくなってきた。"],["若エビ","一週間分の声が積もった。"],["成エビ","ヒゲも堂々としてきた。"],["主エビ","この海の主。あなたの声の海。"],["伝説のエビ","続いた日々の、確かな証。"]],
+  recDays:n=>`（記録 ${n} 日）`, nextIn:(name,n)=>`次の「${name}」まで、あと ${n} 日分`, maxed:"ここまでの記録、すべてが証です。",
+  totals:(v,m,t)=>`これまで — 声 ${v} 本（計 ${m} 分）・記録 ${t} 件`,
+  bkIng:"書き出し中…", bkOk:"バックアップを書き出しました", bkBad:"Koebiのバックアップではありません",
+  rsOk:(v,e)=>`復元しました（声 ${v} 件・記録 ${e} 件）`, rsNg:"復元に失敗しました",
+  exportTitle:"書き出し", exportHint:"記録全体を Markdown で書き出せます（Obsidian にそのまま置ける形式）。",
+  exportBtn:"📄 Markdown で書き出す", installBtn:"📲 ホーム画面に追加する",
+  settingsTitle:"設定", aboutTitle:"このアプリについて",
+  aboutBody:`「声（koe）」×「日（bi・日記の日）」、そして小さなエビ（小エビ）。日本語の言葉遊びから生まれた名前です。<br>
+データはこの端末内に保存されます。AI文字起こしを有効にした場合のみ、対象の音声を Google Gemini に送信します。<br>
+つらいときは、信頼できる人や専門家にも頼ってください。`,
+},
+en:{
+  nav:{rec:"Voice",dump:"Release",log:"Log",share:"Share",care:"Care",shrimp:"Koebi"},
+  tap:"Tap to record", recOn:"Recording\nTap to stop", waveOn:"🌊 Let it all out\nTap to stop",
+  micNg:"Mic unavailable\nCheck permission", saved:"Saved", waveSaved:"🌊 You let it out. Good on you for coming here",
+  hintRec:"Ideas, notes, feelings, or just talking.<br>Everything you voice piles up here.<br><br>Audio is stored on this device only.<br>Sent to Gemini only if AI transcription is enabled.",
+  tagEdit:"✎ Edit tags", tagEditEnd:"✔ Done editing", tagPh:"New tag (e.g. 🌙 Dreams)",
+  add:"Add", resetStd:"Reset to defaults", editEnd:"Done editing",
+  dumpHead:"🫧 <b>Release Box</b><br>Drop your to-dos and worries here as they are.<br>No sorting needed — getting them out is enough. Minus to zero.",
+  dumpPh:"By voice or by text", dumpSave:"Leave it here",
+  chipOpen:"Here", chipDone:"Done", chipRel:"Let go",
+  dumpEmptyOpen:"Empty for now.", dumpEmptyDone:"Things you finished appear here.", dumpEmptyRel:"Things you let go rest here.",
+  actDone:"✔ Done", actRel:"🌊 Let go", actBack:"↩ Bring back",
+  tPut:"Left it here", tPutN:n=>`Left ${n} items here`, tDone:"Done. One thing lighter", tRel:"Let it go",
+  hintLog:"Bubbles = your voice (color = tone of what you said). Tap bubbles to play, tap the card for text (copyable).",
+  tlEmpty:"No records yet.<br>It all starts with your first voice.",
+  dumpBox:"Release Box", stateRec:"Mood log", selfCare:"Self-care", honest:"Honest log",
+  copy:"📋 Copy", edit:"✎ Edit", share:"📤 Share", copied:"Copied",
+  del:"🧽 Delete", delAgain:"🧽 Tap again to delete", delDone:"Deleted",
+  save:"Save", cancel:"Cancel", updated:"Updated", recorded:"Logged",
+  noTrKey:"No transcript — 🔤 for AI transcription, ✎ to type", noTr:"No transcript — add via ✎ Edit",
+  trIng:"Transcribing…", trOk:"Transcription ready",
+  shareHint:"The Koebi Sea — voice bubbles drift by. Only yours for now.<br>Someday, everyone's bubbles will float through here.",
+  seaEmpty:"No bubbles yet. Record your first voice.",
+  stages:[["Egg","A sign of beginnings."],["Hatchling","Newly born. First step."],["Little Shrimp","Getting shrimp-like."],["Young Shrimp","A week of voice piled up."],["Grown Shrimp","Proud whiskers now."],["Sea Master","Master of this sea of your voice."],["Legendary Shrimp","Proof of the days that continued."]],
+  recDays:n=>` (${n} days recorded)`, nextIn:(name,n)=>`${n} more days to "${name}"`, maxed:"Everything recorded so far is your proof.",
+  totals:(v,m,t)=>`So far — ${v} voices (${m} min) · ${t} records`,
+  bkIng:"Exporting…", bkOk:"Backup exported", bkBad:"Not a Koebi backup file",
+  rsOk:(v,e)=>`Restored (${v} voices · ${e} records)`, rsNg:"Restore failed",
+  exportTitle:"Export", exportHint:"Export all records as Markdown (drops straight into Obsidian).",
+  exportBtn:"📄 Export as Markdown", installBtn:"📲 Add to home screen",
+  settingsTitle:"Settings", aboutTitle:"About this app",
+  aboutBody:`<b>Koebi</b> is Japanese wordplay: <i>koe</i> (声, voice) × <i>bi</i> (日, day — as in diary), making a "voice diary". It also sounds like <i>ko-ebi</i> (小エビ) — a little shrimp. The name stays in Japanese on purpose.<br>
+Your data stays on this device. Audio is sent to Google Gemini only when AI transcription is enabled.<br>
+When things get heavy, please also lean on people you trust or professionals.`,
+}
+};
+const uiLangPref = () => localStorage.getItem("koebi.uiLang") || "ja";
+const T = k => (STR[uiLangPref()][k] ?? STR.ja[k]);
+
+function applyLang(){
+  document.documentElement.lang = uiLangPref() === "en" ? "en" : "ja";
+  $$("nav [data-nav]").forEach(e=>{ e.textContent = T("nav")[e.dataset.nav]; });
+  if(!(mediaRecorder && mediaRecorder.state === "recording")) recState.textContent = T("tap");
+  $("#panel-rec .hint").innerHTML = T("hintRec");
+  $(".dump-head").innerHTML = T("dumpHead");
+  dumpText.placeholder = T("dumpPh");
+  $("#dumpSave").textContent = T("dumpSave");
+  const chipMap = {open:"chipOpen", done:"chipDone", released:"chipRel"};
+  $$("#panel-dump .chip").forEach(c=>{ if(chipMap[c.dataset.f]) c.textContent = T(chipMap[c.dataset.f]); });
+  $("#panel-log > .hint").innerHTML = T("hintLog");
+  $("#shareHint").innerHTML = T("shareHint");
+  $("#settingsTitle").textContent = T("settingsTitle");
+  $("#exportTitle").textContent = T("exportTitle");
+  $("#exportHint").textContent = T("exportHint");
+  $("#exportMd").textContent = T("exportBtn");
+  $("#installBtn").textContent = T("installBtn");
+  $("#aboutTitle").textContent = T("aboutTitle");
+  $("#aboutBody").innerHTML = T("aboutBody");
+  $$("#uiLangChips .chip").forEach(c=>c.classList.toggle("on", c.dataset.ul === uiLangPref()));
+  renderTagEditBox();
+}
+$("#uiLangChips").addEventListener("click", e=>{
+  const b = e.target.closest(".chip"); if(!b) return;
+  localStorage.setItem("koebi.uiLang", b.dataset.ul);
+  applyLang();
+  renderDumps(); renderShrimp(); renderOrbit();
+  if($("#panel-log").classList.contains("active")) renderTimeline();
+});
+
+/* =========================================================
+   全データ バックアップ / 復元（APIキーは含めない）
+   ========================================================= */
+const BK_SETTINGS = ["koebi.care","koebi.slips","koebi.tags","koebi.lang","koebi.uiLang","koebi.autoTr"];
+
+async function exportAll(){
+  toast(T("bkIng"));
+  const recs = await getAll("recordings");
+  const ents = await getAll("entries");
+  const recOut = [];
+  for(const r of recs){
+    const audio = await new Promise((res,rej)=>{
+      const fr = new FileReader();
+      fr.onload = ()=>res(fr.result); fr.onerror = rej;
+      fr.readAsDataURL(r.blob);
+    });
+    const {blob, ...rest} = r;
+    recOut.push({...rest, audio});
+  }
+  const settings = {};
+  BK_SETTINGS.forEach(k=>{ const v = localStorage.getItem(k); if(v != null) settings[k] = v; });
+  const data = {app:"koebi", ver:1, exported:Date.now(), entries:ents, recordings:recOut, settings};
+  const f = new File([JSON.stringify(data)], `koebi_backup_${dateStr(new Date())}.json`, {type:"application/json"});
+  try{
+    if(navigator.canShare && navigator.canShare({files:[f]})){
+      await navigator.share({files:[f], title:"Koebi backup"});
+    }else{
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(f); a.download = f.name; a.click();
+    }
+    toast(T("bkOk"));
+  }catch(e){}
+}
+
+async function importAll(file){
+  try{
+    const j = JSON.parse(await file.text());
+    if(j.app !== "koebi"){ toast(T("bkBad")); return; }
+    for(const e of (j.entries || [])) await put("entries", e);
+    let nv = 0;
+    for(const r of (j.recordings || [])){
+      const blob = await (await fetch(r.audio)).blob();
+      const {audio, ...rest} = r;
+      await put("recordings", {...rest, blob});
+      nv++;
+    }
+    Object.entries(j.settings || {}).forEach(([k,v])=>localStorage.setItem(k,v));
+    toast(T("rsOk")(nv, (j.entries||[]).length));
+    applyLang(); renderDumps(); renderCare(); renderSlipGrid(); renderShrimp(); renderOrbit();
+  }catch(e){ toast(T("rsNg")); }
+}
+$("#backupBtn").addEventListener("click", exportAll);
+$("#restoreBtn").addEventListener("click", ()=>$("#restoreFile").click());
+$("#restoreFile").addEventListener("change", e=>{
+  if(e.target.files[0]) importAll(e.target.files[0]);
+  e.target.value = "";
+});
+
+/* =========================================================
+   こえびの海（シェア・SNSプレビュー：いまは自分の泡だけ）
+   ========================================================= */
+let seaAudio = null;
+async function renderShare(){
+  const sea = $("#sea");
+  sea.innerHTML = "";
+  const recs = (await getAll("recordings")).sort((a,b)=>b.ts-a.ts).slice(0,7);
+  if(!recs.length){
+    sea.innerHTML = `<p class="hint" style="position:absolute;left:16px;right:16px;top:45%;text-align:center">${T("seaEmpty")}</p>`;
+    return;
+  }
+  const slots = [[27,15],[71,11],[21,46],[68,41],[36,70],[78,73],[50,29]];
+  const rnd = seededRand("koebi-sea");
+  recs.forEach((r,i)=>{
+    const [sx,sy] = slots[i % slots.length];
+    const size = 118 + Math.min(64, r.dur || 10) + Math.round(rnd() * 18);
+    const div = document.createElement("div");
+    div.className = "post-bub";
+    div.style.width = div.style.height = size + "px";
+    div.style.left = `calc(${sx}% - ${size/2}px)`;
+    div.style.top  = `calc(${sy}% - ${size/2}px)`;
+    div.style.animationDelay = (-(rnd()*13)).toFixed(1) + "s";
+    div.style.animationDuration = (12 + rnd()*6).toFixed(1) + "s";
+    div.innerHTML = `<img src="icons/shrimp.png" alt="">`;
+    const cvm = document.createElement("canvas");
+    div.append(cvm);
+    const txt = document.createElement("div");
+    txt.className = "pb-text";
+    txt.textContent = r.transcript || "";
+    const when = document.createElement("div");
+    when.className = "pb-when";
+    when.textContent = `${r.date.slice(5).replace("-","/")} ${timeStr(new Date(r.ts))}`;
+    div.append(txt, when);
+    sea.append(div);
+    requestAnimationFrame(()=>{
+      cvm.width = (cvm.clientWidth || 120) * devicePixelRatio;
+      cvm.height = (cvm.clientHeight || 26) * devicePixelRatio;
+      cvm._sized = true;
+      const tdd = r.tag ? tagDef(r.tag) : null;
+      drawPeaks(cvm, r.peaks || fallbackPeaks(r.id), 1, {seed:r.id, tone:r.tone, form:(tdd && tdd.form) || null});
+    });
+    div.addEventListener("click", ()=>{
+      if(seaAudio && !seaAudio.paused){ seaAudio.pause(); seaAudio = null; return; }
+      seaAudio = new Audio(URL.createObjectURL(r.blob));
+      seaAudio.play().catch(()=>{});
+    });
+  });
+}
+
 /* ---------- PWA インストール ---------- */
 let deferredPrompt = null;
 window.addEventListener("beforeinstallprompt", e=>{
@@ -1973,6 +2243,7 @@ $("#installBtn").addEventListener("click", async ()=>{
   $("#todayLabel").textContent = `${now.getMonth()+1}/${now.getDate()}（${WEEK[now.getDay()]}）`;
   await openDB();
   if(navigator.storage && navigator.storage.persist){ try{ await navigator.storage.persist(); }catch(e){} }
+  applyLang();
   renderDumps(); renderCare(); renderSlipGrid(); drawMoodChart(); renderShrimp(); renderLangChips(); renderTrSettings(); renderOrbit();
   if("serviceWorker" in navigator){
     try{ await navigator.serviceWorker.register("sw.js"); }catch(e){}
