@@ -153,7 +153,8 @@ canvas.vp{width:100%;height:58px;display:block;margin:8px 0 2px;border-radius:8p
 .care-item.done .box{background:var(--accent);color:#fff}
 .care-item.done .lbl{color:var(--sub)}
 .care-note{font-size:12px;color:var(--sub);text-align:center;margin-top:12px;line-height:1.8}
-#careEditBtn{float:right;background:none;color:#b9cdc7;font-size:15px;padding:2px 8px}
+#careEditBtn, #slipEditBtn{float:right;background:none;color:#b9cdc7;font-size:15px;padding:2px 8px}
+.slip-grid button.editing{outline:2px dashed var(--danger);color:var(--danger)}
 .care-rm{margin-left:auto;background:none;color:#c9d8d3;font-size:14px;padding:4px 8px;flex:none}
 .care-add{display:flex;gap:8px;margin-top:12px}
 .care-add input{
@@ -229,7 +230,9 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
     </div>
   </div>
   <p class="hint" style="text-align:center">
-    音声はすべてこの端末の中に保存されます。外部には送信されません。
+    アイデアも、記録も、感情も、ただ語るのも。<br>
+    声に出したものは、ぜんぶここに積もっていきます。<br><br>
+    音声はこの端末内に保存されます。<br>AI文字起こしを有効にした場合のみ、その音声を Gemini に送信します。
   </p>
 </section>
 
@@ -237,8 +240,8 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
 <section class="panel" id="panel-dump">
   <div class="dump-head">
     🫧 <b>吐き出しBOX</b><br>
-    頭の中の「やらなきゃ」をそのまま置いていく場所。<br>
-    整理は不要、出すだけで十分。
+    「やらなきゃ」も、もやもやも、そのまま置いていく場所。<br>
+    整理は不要、出すだけで十分。マイナスを、ゼロに。
   </div>
   <div class="card">
     <div class="dump-input">
@@ -257,7 +260,7 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
 
 <!-- ============ 記録 ============ -->
 <section class="panel" id="panel-log">
-  <p class="hint">録音・吐き出し・状態の記録が日付順に並びます。タップで再生・編集。</p>
+  <p class="hint">声出し・吐き出し・状態の記録が日付順に並びます。タップで再生・編集。</p>
   <div id="timeline"></div>
 </section>
 
@@ -282,9 +285,10 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
     <p class="care-note">できた分だけで十分です。</p>
   </div>
   <div class="card">
-    <h2>正直ログ</h2>
+    <h2>正直ログ <button id="slipEditBtn" title="項目を編集">✎</button></h2>
     <p class="hint">「やってしまった」の記録もワンタップで。責めるためではなく、波のパターンを知るために。</p>
     <div class="slip-grid" id="slipGrid"></div>
+    <div id="slipEditBox"></div>
   </div>
 </section>
 
@@ -329,7 +333,7 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
   <div class="card">
     <h2>このアプリについて</h2>
     <p class="hint">
-      Koebi（こえび）v0.4 — nomacod<br>
+      Koebi（こえび）<span id="verLabel">v0.4.2</span> — nomacod<br>
       データはこの端末内に保存されます。AI文字起こしを有効にした場合のみ、文字起こし対象の音声を Google Gemini に送信します。<br>
       つらいときは、信頼できる人や専門家にも頼ってください。
     </p>
@@ -339,7 +343,7 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
 </main>
 
 <nav>
-  <button class="on" data-p="rec"><span class="i">🎙️</span>録音</button>
+  <button class="on" data-p="rec"><span class="i">🎙️</span>声出し</button>
   <button data-p="dump"><span class="i">🫧</span>吐き出し</button>
   <button data-p="log"><span class="i">🗓️</span>記録</button>
   <button data-p="care"><span class="i">🩷</span>ケア</button>
@@ -446,30 +450,74 @@ function resolveLang(){
 const getGeminiKey = () => (localStorage.getItem("koebi.gemini") || "").trim();
 const autoTrOn = () => localStorage.getItem("koebi.autoTr") !== "0";
 
+/* WebM/Opus は Gemini の対応形式外のことがあるため、WAV(16kHz mono) に変換して送る */
+async function blobToWav16k(blob){
+  const ac = new (window.AudioContext||window.webkitAudioContext)();
+  const buf = await ac.decodeAudioData(await blob.arrayBuffer());
+  ac.close();
+  const rate = 16000;
+  const off = new OfflineAudioContext(1, Math.ceil(buf.duration * rate), rate);
+  const src = off.createBufferSource();
+  src.buffer = buf; src.connect(off.destination); src.start();
+  const out = await off.startRendering();
+  const ch = out.getChannelData(0);
+  const len = ch.length;
+  const ab = new ArrayBuffer(44 + len*2);
+  const dv = new DataView(ab);
+  const ws = (o,s)=>{ for(let i=0;i<s.length;i++) dv.setUint8(o+i, s.charCodeAt(i)); };
+  ws(0,"RIFF"); dv.setUint32(4, 36 + len*2, true); ws(8,"WAVE"); ws(12,"fmt ");
+  dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,1,true);
+  dv.setUint32(24,rate,true); dv.setUint32(28,rate*2,true); dv.setUint16(32,2,true); dv.setUint16(34,16,true);
+  ws(36,"data"); dv.setUint32(40,len*2,true);
+  for(let i=0;i<len;i++){
+    const v = Math.max(-1, Math.min(1, ch[i]));
+    dv.setInt16(44 + i*2, v < 0 ? v*0x8000 : v*0x7fff, true);
+  }
+  return new Blob([ab], {type:"audio/wav"});
+}
+
+/* モデルは新しい順に試す（提供終了で404になっても自動で次へ） */
+const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash"];
+
 async function transcribeBlob(blob, mime){
   const key = getGeminiKey();
   if(!key) return null;
+  // WAVへ変換（失敗したら元の形式のまま送ってみる）
+  let sendBlob = blob, sendMime = (mime||"audio/webm").split(";")[0];
+  try{
+    sendBlob = await blobToWav16k(blob);
+    sendMime = "audio/wav";
+  }catch(e){}
   const b64 = await new Promise((res, rej)=>{
     const fr = new FileReader();
     fr.onload = ()=>res(String(fr.result).split(",")[1]);
     fr.onerror = rej;
-    fr.readAsDataURL(blob);
+    fr.readAsDataURL(sendBlob);
   });
   const langHint = resolveLang() === "en-US" ? "English" : "日本語";
-  const body = {
+  const body = JSON.stringify({
     contents: [{ parts: [
       { text: `この音声を文字起こししてください。話されている言語（主に${langHint}）のまま、本文のみを出力してください。句読点は適切に補い、前置きや説明は不要です。` },
-      { inline_data: { mime_type: (mime||"audio/webm").split(";")[0], data: b64 } }
+      { inline_data: { mime_type: sendMime, data: b64 } }
     ]}]
-  };
-  const res = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + encodeURIComponent(key),
-    { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) }
-  );
-  if(!res.ok) throw new Error("Gemini API エラー（" + res.status + "）");
-  const j = await res.json();
-  const text = (j.candidates?.[0]?.content?.parts || []).map(p=>p.text || "").join("").trim();
-  return text || null;
+  });
+  let lastStatus = null, lastMsg = "";
+  for(const model of GEMINI_MODELS){
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` + encodeURIComponent(key),
+      { method:"POST", headers:{"Content-Type":"application/json"}, body }
+    );
+    if(res.status === 404){ lastStatus = 404; continue; } // モデル引退 → 次の候補へ
+    const j = await res.json().catch(()=>null);
+    if(!res.ok){
+      lastStatus = res.status;
+      lastMsg = (j?.error?.message || "").slice(0, 90);
+      throw new Error(`${res.status}: ${lastMsg || "APIエラー"}`);
+    }
+    const text = (j?.candidates?.[0]?.content?.parts || []).map(p=>p.text || "").join("").trim();
+    return text || null;
+  }
+  throw new Error(`利用可能なモデルが見つかりません（${lastStatus||404}）`);
 }
 
 async function transcribeRecording(r, onDone){
@@ -485,8 +533,10 @@ async function transcribeRecording(r, onDone){
       toast("文字起こし結果が空でした");
     }
   }catch(err){
-    toast(err.message.includes("403") || err.message.includes("400")
-      ? "APIキーを確認してください" : "文字起こしに失敗しました（通信を確認）");
+    const m = String(err.message||"");
+    if(m.startsWith("403") || m.includes("API key")) toast("APIキーが無効のようです。設定を確認してください");
+    else if(m.startsWith("429")) toast("無料枠の上限です。少し待ってからもう一度");
+    else toast("文字起こし失敗: " + m.slice(0, 60));
   }
 }
 
@@ -1013,7 +1063,7 @@ async function renderCare(){
 /* =========================================================
    正直ログ（ワンタップ）
    ========================================================= */
-const SLIP_ITEMS = [
+const SLIP_DEFAULTS = [
   {k:"alc",     e:"🍺", t:"飲酒"},
   {k:"doom",    e:"📱", t:"スマホ・SNS沼"},
   {k:"night",   e:"🌙", t:"夜ふかし"},
@@ -1028,20 +1078,71 @@ const LEGACY_SLIPS = [
   {k:"binge", e:"🍜", t:"食べすぎ"},
   {k:"skip",  e:"🕳️", t:"予定を飛ばした"},
 ];
-const slipDef = k => SLIP_ITEMS.find(x=>x.k===k) || LEGACY_SLIPS.find(x=>x.k===k);
+function slipItems(){
+  try{
+    const s = JSON.parse(localStorage.getItem("koebi.slips") || "");
+    if(Array.isArray(s) && s.length) return s;
+  }catch(e){}
+  return SLIP_DEFAULTS;
+}
+function saveSlipItems(list){
+  if(list) localStorage.setItem("koebi.slips", JSON.stringify(list));
+  else localStorage.removeItem("koebi.slips");
+}
+// 削除・改名された項目でも過去の記録は正しく表示する
+const slipDef = k => slipItems().find(x=>x.k===k)
+  || SLIP_DEFAULTS.find(x=>x.k===k)
+  || LEGACY_SLIPS.find(x=>x.k===k);
+
+let slipEditing = false;
 
 function renderSlipGrid(){
   const g = $("#slipGrid");
   g.innerHTML = "";
-  for(const s of SLIP_ITEMS){
+  const items = slipItems();
+  for(const s of items){
     const b = document.createElement("button");
-    b.innerHTML = `<span class="e">${s.e}</span>${s.t}`;
+    b.innerHTML = `<span class="e">${esc(s.e)}</span>${slipEditing ? "✕ " : ""}${esc(s.t)}`;
+    if(slipEditing) b.classList.add("editing");
     b.addEventListener("click", async ()=>{
+      if(slipEditing){
+        saveSlipItems(items.filter(x=>x.k !== s.k));
+        renderSlipGrid();
+        return;
+      }
       const now = new Date();
       await put("entries", {id:uid(), type:"slip", ts:now.getTime(), date:dateStr(now), k:s.k});
       toast(`${s.t} を記録しました`);
     });
     g.append(b);
+  }
+  const editBox = $("#slipEditBox");
+  editBox.innerHTML = "";
+  if(slipEditing){
+    const row = document.createElement("div");
+    row.className = "care-add";
+    const inp = document.createElement("input");
+    inp.placeholder = "新しい項目（例：🍕 深夜ピザ）";
+    const add = mkBtn("追加", ()=>{
+      const v = inp.value.trim();
+      if(!v) return;
+      // 先頭が絵文字っぽければアイコンに、それ以外は📝
+      const parts = v.split(/\s+/);
+      let e = "📝", t = v;
+      if(parts.length > 1 && [...parts[0]].length <= 2 && /[^\w぀-ヿ一-鿿]/u.test(parts[0])){
+        e = parts[0]; t = parts.slice(1).join(" ");
+      }
+      saveSlipItems([...slipItems(), {k:"s"+uid(), e, t}]);
+      renderSlipGrid();
+    });
+    row.append(inp, add);
+    const row2 = document.createElement("div");
+    row2.className = "care-add";
+    row2.append(
+      mkBtn("標準の項目に戻す", ()=>{ saveSlipItems(null); renderSlipGrid(); }),
+      mkBtn("編集を終える", ()=>{ slipEditing = false; renderSlipGrid(); })
+    );
+    editBox.append(row, row2);
   }
 }
 
@@ -1400,6 +1501,7 @@ $("#exportMd").addEventListener("click", async ()=>{
 });
 
 $("#careEditBtn").addEventListener("click", ()=>{ careEditing = !careEditing; renderCare(); });
+$("#slipEditBtn").addEventListener("click", ()=>{ slipEditing = !slipEditing; renderSlipGrid(); });
 
 /* ---------- 設定：AI文字起こし ---------- */
 $("#gemKey").addEventListener("input", ()=>{
@@ -1448,6 +1550,14 @@ $("#installBtn").addEventListener("click", async ()=>{
   renderDumps(); renderCare(); renderSlipGrid(); drawMoodChart(); renderShrimp(); renderLangChips(); renderTrSettings();
   if("serviceWorker" in navigator){
     try{ await navigator.serviceWorker.register("sw.js"); }catch(e){}
+  }
+  // バージョン表示は実際に有効なSWキャッシュ名から取る（表示＝実態を保証）
+  if(window.caches){
+    try{
+      const ks = await caches.keys();
+      const k = ks.filter(x=>x.startsWith("koebi-")).sort().pop();
+      if(k) $("#verLabel").textContent = k.replace("koebi-","");
+    }catch(e){}
   }
 })();
 </script>
