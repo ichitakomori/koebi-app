@@ -2055,7 +2055,7 @@ ja:{
   save:"保存", cancel:"キャンセル", updated:"更新しました", recorded:"記録しました",
   noTrKey:"文字起こしなし — 🔤 でAI文字起こし、✎ 編集で手入力", noTr:"文字起こしなし — ✎ 編集で追記できます",
   trIng:"文字起こし中…", trOk:"文字起こしができました",
-  shareHint:"こえびの海 — 声の泡がただよっています。キーワードをタップで再生、泡のほかの場所で全文。<br>いまはあなたの泡だけ。将来ここに、いろんな人のつぶやきの泡が流れてきます（ユーザー表示はモック）。",
+  shareHint:"こえびの海 — 声の泡がただよっています。キーワードをタップで再生、泡のほかの場所で全文。<br>あなたの泡のほかはモックです。将来ここに、本物のみんなの泡が流れてきます。",
   seaEmpty:"まだ泡がありません。声出しから最初のひと声を。",
   stages:[["卵","はじまりの気配。"],["稚エビ","生まれたて。最初の一歩。"],["小エビ","少しエビらしくなってきた。"],["若エビ","一週間分の声が積もった。"],["成エビ","ヒゲも堂々としてきた。"],["主エビ","この海の主。あなたの声の海。"],["伝説のエビ","続いた日々の、確かな証。"]],
   recDays:n=>`（記録 ${n} 日）`, nextIn:(name,n)=>`次の「${name}」まで、あと ${n} 日分`, maxed:"ここまでの記録、すべてが証です。",
@@ -2080,6 +2080,7 @@ ja:{
   seaUser:"あなた", seaClose:"閉じる",
   pageTitle:"Koebi こえび — 声で残す、自分だけの日記",
   gemPh:"Gemini APIキー（AIza…）",
+  mockNoAudio:"モックの泡です（音声はありません）", mockNote:"（モック投稿）",
   aboutBody:`「声（koe）」×「日（bi・日記の日）」、そして小さなエビ（小エビ）。日本語の言葉遊びから生まれた名前です。<br>
 データはこの端末内に保存されます。AI文字起こしを有効にした場合のみ、対象の音声を Google Gemini に送信します。<br>
 つらいときは、信頼できる人や専門家にも頼ってください。`,
@@ -2105,7 +2106,7 @@ en:{
   save:"Save", cancel:"Cancel", updated:"Updated", recorded:"Logged",
   noTrKey:"No transcript — 🔤 for AI transcription, ✎ to type", noTr:"No transcript — add via ✎ Edit",
   trIng:"Transcribing…", trOk:"Transcription ready",
-  shareHint:"The Koebi Sea — voice bubbles drift by. Tap keywords to play, tap elsewhere on a bubble for the full text.<br>Only yours for now — someday everyone's bubbles will float here (user display is a mock).",
+  shareHint:"The Koebi Sea — voice bubbles drift by. Tap keywords to play, tap elsewhere on a bubble for the full text.<br>Everything except your own bubbles is a mock — someday real voices will float here.",
   seaEmpty:"No bubbles yet. Record your first voice.",
   stages:[["Egg","A sign of beginnings."],["Hatchling","Newly born. First step."],["Little Shrimp","Getting shrimp-like."],["Young Shrimp","A week of voice piled up."],["Grown Shrimp","Proud whiskers now."],["Sea Master","Master of this sea of your voice."],["Legendary Shrimp","Proof of the days that continued."]],
   recDays:n=>` (${n} days recorded)`, nextIn:(name,n)=>`${n} more days to "${name}"`, maxed:"Everything recorded so far is your proof.",
@@ -2130,6 +2131,7 @@ en:{
   seaUser:"you", seaClose:"Close",
   pageTitle:"Koebi — your voice diary, kept in bubbles",
   gemPh:"Gemini API key (AIza…)",
+  mockNoAudio:"Mock bubble (no audio)", mockNote:" (mock post)",
   aboutBody:`<b>Koebi</b> is Japanese wordplay: <i>koe</i> (声, voice) × <i>bi</i> (日, day — as in diary), making a "voice diary". It also sounds like <i>ko-ebi</i> (小エビ) — a little shrimp. The name stays in Japanese on purpose.<br>
 Your data stays on this device. Audio is sent to Google Gemini only when AI transcription is enabled.<br>
 When things get heavy, please also lean on people you trust or professionals.`,
@@ -2252,6 +2254,25 @@ $("#restoreFile").addEventListener("change", e=>{
    ========================================================= */
 let seaAudio = null, seaPlayingId = null;
 
+/* モック投稿（SNSの未来像プレビュー。音声なし・全文にモック明記） */
+const MOCK_POSTS = [
+  {name:"Yuki", ava:"🐠", tone:"calm",
+   kw:{ja:["朝の海","散歩"], en:["morning sea","walk"]},
+   text:{ja:"今朝は海沿いを歩いた。風が気持ちよかった。", en:"Walked along the sea this morning. The wind felt great."}},
+  {name:"Leo", ava:"🌙", tone:"idea",
+   kw:{ja:["夜のひらめき"], en:["midnight idea"]},
+   text:{ja:"寝る前に急に企画を思いついた。忘れないうちに録っておく。", en:"A plan hit me right before bed. Recording it before I forget."}},
+  {name:"Mika", ava:"🫧", tone:"joy",
+   kw:{ja:["合格！"], en:["passed!"]},
+   text:{ja:"試験受かった！声が震えてるかもしれない。", en:"I passed the exam! My voice might be shaking."}},
+  {name:"Sam", ava:"🌊", tone:"tense",
+   kw:{ja:["深呼吸"], en:["breathe"]},
+   text:{ja:"今日は波が高い日。とりあえず全部吐き出す。", en:"Rough waves today. Just letting it all out."}},
+  {name:"Aoi", ava:"🍵", tone:"sad",
+   kw:{ja:["おつかれ"], en:["long day"]},
+   text:{ja:"疲れた一日だった。でも、ちゃんと帰ってきた。", en:"A tiring day. But I made it home."}},
+];
+
 /* 大バブルの中を満たす気泡（未再生スタイル・トーン色）——泡のなかの泡 */
 function seaBubbleBg(cv, r){
   const size = cv.width;
@@ -2277,16 +2298,20 @@ function seaBubbleBg(cv, r){
 async function renderShare(){
   const sea = $("#sea");
   sea.innerHTML = "";
-  const recs = (await getAll("recordings")).sort((a,b)=>b.ts-a.ts).slice(0,7);
-  if(!recs.length){
-    sea.innerHTML = `<p class="hint" style="position:absolute;left:16px;right:16px;top:45%;text-align:center">${T("seaEmpty")}</p>`;
-    return;
-  }
+  const lang = uiLangPref();
+  const recs = (await getAll("recordings")).sort((a,b)=>b.ts-a.ts).slice(0,4);
+  // 自分の泡＋モックの泡を混ぜて最大7つ
+  const posts = [
+    ...recs.map(r=>({kind:"rec", r})),
+    ...MOCK_POSTS.map(m=>({kind:"mock", m})),
+  ].slice(0, 7);
   const slots = [[27,15],[71,11],[21,46],[68,41],[36,70],[78,73],[50,29]];
   const rnd = seededRand("koebi-sea");
-  recs.forEach((r,i)=>{
+  posts.forEach((p, i)=>{
     const [sx,sy] = slots[i % slots.length];
-    const size = 128 + Math.min(58, r.dur || 10) + Math.round(rnd() * 16);
+    const isRec = p.kind === "rec";
+    const r = p.r, m = p.m;
+    const size = 128 + (isRec ? Math.min(58, r.dur || 10) : Math.round(rnd()*40)) + Math.round(rnd() * 16);
     const div = document.createElement("div");
     div.className = "post-bub";
     div.style.width = div.style.height = size + "px";
@@ -2298,43 +2323,54 @@ async function renderShare(){
     const bg = document.createElement("canvas");
     bg.className = "pb-bg";
     div.append(bg);
-    // ユーザー小バブル（モック：円形no-photoアイコン＋直下に名前）
+    // ユーザー小バブル：円形アイコン＋直下に名前
     const user = document.createElement("div");
     user.className = "pb-user";
-    user.innerHTML = `
-      <span class="pb-ava"><svg viewBox="0 0 24 24">
-        <circle cx="12" cy="8.4" r="4.1" fill="#b9c9c3"/>
-        <path d="M4.5 21a7.5 7.5 0 0 1 15 0z" fill="#b9c9c3"/>
-      </svg></span>
-      <span class="pb-name">${T("seaUser")}</span>`;
+    user.innerHTML = isRec
+      ? `<span class="pb-ava"><svg viewBox="0 0 24 24">
+           <circle cx="12" cy="8.4" r="4.1" fill="#b9c9c3"/>
+           <path d="M4.5 21a7.5 7.5 0 0 1 15 0z" fill="#b9c9c3"/>
+         </svg></span>
+         <span class="pb-name">${T("seaUser")}</span>`
+      : `<span class="pb-ava"><b style="font-size:14px">${m.ava}</b></span>
+         <span class="pb-name">${m.name}</span>`;
     // キーワード（タップで再生/停止）
     const kw = document.createElement("button");
     kw.className = "pb-kw";
-    const kws = (r.keywords || []).filter(Boolean);
-    kw.textContent = kws.length ? kws.join(" / ")
-      : (r.transcript ? r.transcript.slice(0, 12) + "…" : "…");
-    kw.addEventListener("click", ev=>{
-      ev.stopPropagation();
-      if(seaPlayingId === r.id && seaAudio && !seaAudio.paused){ seaAudio.pause(); return; }
-      if(seaAudio && !seaAudio.paused) seaAudio.pause();
-      seaAudio = new Audio(URL.createObjectURL(r.blob));
-      seaPlayingId = r.id;
-      seaAudio.play().catch(()=>{});
-    });
+    if(isRec){
+      const kws = (r.keywords || []).filter(Boolean);
+      kw.textContent = kws.length ? kws.join(" / ")
+        : (r.transcript ? r.transcript.slice(0, 12) + "…" : "…");
+      kw.addEventListener("click", ev=>{
+        ev.stopPropagation();
+        if(seaPlayingId === r.id && seaAudio && !seaAudio.paused){ seaAudio.pause(); return; }
+        if(seaAudio && !seaAudio.paused) seaAudio.pause();
+        seaAudio = new Audio(URL.createObjectURL(r.blob));
+        seaPlayingId = r.id;
+        seaAudio.play().catch(()=>{});
+      });
+    }else{
+      kw.textContent = (m.kw[lang] || m.kw.ja).join(" / ");
+      kw.addEventListener("click", ev=>{ ev.stopPropagation(); toast(T("mockNoAudio")); });
+    }
     const when = document.createElement("div");
     when.className = "pb-when";
-    when.textContent = `${r.date.slice(5).replace("-","/")} ${timeStr(new Date(r.ts))}`;
+    when.textContent = isRec
+      ? `${r.date.slice(5).replace("-","/")} ${timeStr(new Date(r.ts))}`
+      : (lang === "en" ? "some day" : "いつかの日");
     div.append(user, kw, when);
-    // 泡のほかの場所タップ → 文字起こし全文
+    // 泡のほかの場所タップ → 全文
     div.addEventListener("click", ()=>{
-      $("#seaSheetText").textContent = r.transcript || (getGeminiKey() ? T("noTrKey") : T("noTr"));
+      $("#seaSheetText").textContent = isRec
+        ? (r.transcript || (getGeminiKey() ? T("noTrKey") : T("noTr")))
+        : `${m.text[lang] || m.text.ja}\n\n— ${m.name}${T("mockNote")}`;
       $("#seaSheet").classList.add("show");
     });
     sea.append(div);
     requestAnimationFrame(()=>{
       const px = (div.clientWidth || size) * devicePixelRatio;
       bg.width = px; bg.height = px;
-      seaBubbleBg(bg, r);
+      seaBubbleBg(bg, isRec ? r : {id:"mock-"+m.name, tone:m.tone, peaks:fallbackPeaks(m.name)});
     });
   });
 }
