@@ -48,20 +48,43 @@ h2{font-size:15px;margin:0 0 6px}
 .hint{font-size:12px;color:var(--sub);line-height:1.7;margin:0 0 10px}
 button{font-family:inherit;border:none;cursor:pointer;color:var(--ink)}
 
-/* ===== 録音 ===== */
-.rec-wrap{display:flex;flex-direction:column;align-items:center;padding:22px 0 10px}
+/* ===== 声出し（泡オービット） ===== */
+.rec-wrap{display:flex;flex-direction:column;align-items:center;padding:12px 0 10px}
+.orbit{position:relative;width:330px;height:330px;max-width:100%}
 #recBtn{
-  width:132px;height:132px;border-radius:50%;
-  background:radial-gradient(circle at 32% 28%, var(--shrimp2), var(--shrimp));
-  box-shadow:0 8px 24px rgba(242,161,150,.45);
-  font-size:52px;transition:transform .15s ease;
-  display:flex;align-items:center;justify-content:center;color:#fff;
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:148px;height:148px;border-radius:50%;
+  background:radial-gradient(circle at 34% 30%, #ffffff, #fdece8);
+  box-shadow:0 8px 24px rgba(242,161,150,.30);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
 }
-#recBtn:active{transform:scale(.94)}
-#recBtn.recording{animation:pulse 1.4s ease-in-out infinite;background:radial-gradient(circle at 32% 28%, #ffd2ca, #ef8d80)}
+#recBtn.recording{
+  animation:pulse 1.4s ease-in-out infinite;
+  background:radial-gradient(circle at 34% 30%, #ffd2ca, #ef8d80);
+}
+#recBtn.recording #recTime, #recBtn.recording #recState{color:#fff}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(242,161,150,.5)}50%{box-shadow:0 0 0 22px rgba(242,161,150,0)}}
-#recTime{font-size:26px;font-variant-numeric:tabular-nums;margin:14px 0 2px}
-#recState{font-size:13px;color:var(--sub);min-height:20px}
+#recShrimp{width:52px;height:auto;margin-bottom:1px}
+#recBtn.recording #recShrimp{animation:listen 1.3s ease-in-out infinite}
+@keyframes listen{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(6deg) translateY(-2px)}}
+#recTime{font-size:20px;font-variant-numeric:tabular-nums;color:var(--ink)}
+#recState{
+  font-size:10.5px;color:var(--sub);max-width:118px;text-align:center;
+  line-height:1.5;white-space:pre-line;min-height:16px;
+}
+.orbit-bubble{
+  position:absolute;width:68px;height:68px;border-radius:50%;
+  transform:translate(-50%,-50%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  font-size:9.5px;color:var(--ink);box-shadow:var(--shadow);
+  animation:floaty 3.4s ease-in-out infinite alternate;
+  transition:opacity .3s ease;
+}
+.orbit-bubble .e{font-size:20px}
+.orbit-bubble.editing{outline:2px dashed var(--danger);color:var(--danger)}
+.orbit.rec .orbit-bubble{opacity:.12;pointer-events:none}
+@keyframes floaty{from{margin-top:-4px}to{margin-top:4px}}
+#tagEditToggle{margin-top:10px;background:none;color:var(--sub);font-size:12px;padding:6px 12px}
 #wave{width:100%;height:56px;margin-top:6px}
 #liveText{
   width:100%;min-height:48px;font-size:14px;line-height:1.8;
@@ -235,12 +258,16 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
 <section class="panel active" id="panel-rec">
   <div class="card">
     <div class="rec-wrap">
-      <button id="recBtn" aria-label="録音">🎙️</button>
-      <div id="recTime">0:00</div>
-      <div id="recState">タップで録音</div>
+      <div class="orbit" id="orbit">
+        <button id="recBtn" aria-label="録音">
+          <img id="recShrimp" src="icons/shrimp.png" alt="">
+          <span id="recTime">0:00</span>
+          <span id="recState">タップで録音</span>
+        </button>
+      </div>
       <canvas id="wave"></canvas>
       <div id="liveText"></div>
-      <div class="tag-row" id="tagRow"></div>
+      <button id="tagEditToggle">✎ タグを編集</button>
       <div id="tagEditBox" style="width:100%"></div>
     </div>
   </div>
@@ -338,6 +365,7 @@ nav button.on .i{filter:none;opacity:1;transform:translateY(-2px)}
       録音と同時の文字起こしができない機種向け（この機種も該当）。録音した音声を、<b>文字起こしのときだけ</b> Google Gemini に送ります。キーはこの端末にのみ保存。<br>
       キーの無料発行：<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey</a> →「Create API key」→ コピーして上に貼り付け。
     </p>
+    <p class="hint" id="gemCountLabel" style="margin:10px 0 0"></p>
   </div>
   <div class="card">
     <h2>書き出し</h2>
@@ -495,12 +523,36 @@ async function blobToWav16k(blob){
 const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash"];
 const TONES = ["joy","calm","idea","sad","tense"];
 
+/* 使用回数カウンター（無料枠の目安。リセット境界＝太平洋時間の午前0時に合わせる） */
+function ptDateStr(){
+  return new Intl.DateTimeFormat("en-CA", {timeZone:"America/Los_Angeles"}).format(new Date());
+}
+function geminiCountToday(){
+  try{
+    const o = JSON.parse(localStorage.getItem("koebi.gemCount") || "{}");
+    if(o.d === ptDateStr()) return o.n || 0;
+  }catch(e){}
+  return 0;
+}
+function bumpGeminiCount(){
+  const d = ptDateStr();
+  let o = {d, n:0};
+  try{
+    const p = JSON.parse(localStorage.getItem("koebi.gemCount") || "{}");
+    if(p.d === d) o = p;
+  }catch(e){}
+  o.n = (o.n || 0) + 1;
+  localStorage.setItem("koebi.gemCount", JSON.stringify(o));
+  if(typeof renderGemCount === "function") renderGemCount();
+}
+
 async function geminiGenerate(parts){
   const key = getGeminiKey();
   if(!key) return null;
   const body = JSON.stringify({ contents: [{ parts }] });
   let lastStatus = null;
   for(const model of GEMINI_MODELS){
+    bumpGeminiCount();
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` + encodeURIComponent(key),
       { method:"POST", headers:{"Content-Type":"application/json"}, body }
@@ -841,58 +893,71 @@ let mediaRecorder=null, chunks=[], recStart=0, recTimer=null,
 
 const recBtn = $("#recBtn"), recTime = $("#recTime"),
       recState = $("#recState"), liveText = $("#liveText"),
-      tagRow = $("#tagRow"), tagEditBox = $("#tagEditBox");
+      orbitEl = $("#orbit"), tagEditBox = $("#tagEditBox");
 let pendingTagK = null, tagEditing = false;
 
-function renderTagRow(){
-  tagRow.innerHTML = "";
-  const items = tagItems();
-  for(const s of items){
+/* 泡ごとに微妙に違うパステル */
+const ORBIT_COLORS = ["#fde3dd","#dff0ea","#fbeed3","#e6e4f4","#ddebf5","#fde7ee","#e2f2e3","#f2e8da","#ece5f0","#e0efe8"];
+
+function renderOrbit(){
+  orbitEl.querySelectorAll(".orbit-bubble").forEach(b=>b.remove());
+  const items = [{k:null, e:"🎙️", t:"録音"}, ...tagItems()];
+  const N = items.length;
+  const W = orbitEl.clientWidth || 330;
+  const C = W / 2, R = C - 40;
+  items.forEach((s, i)=>{
+    const a = -Math.PI/2 + i * 2 * Math.PI / N;
     const b = document.createElement("button");
-    b.className = "tag-btn" + (tagEditing ? " editing" : "");
-    b.innerHTML = `<span class="e">${esc(s.e)}</span>${tagEditing ? "✕ " : ""}${esc(s.t)}`;
+    b.className = "orbit-bubble" + (tagEditing && s.k ? " editing" : "");
+    b.style.left = (C + R * Math.cos(a)).toFixed(1) + "px";
+    b.style.top  = (C + R * Math.sin(a)).toFixed(1) + "px";
+    b.style.background = ORBIT_COLORS[i % ORBIT_COLORS.length];
+    b.style.animationDelay = (i * 0.47) + "s";
+    b.style.animationDuration = (3.1 + (i % 4) * 0.4) + "s";
+    b.innerHTML = `<span class="e">${esc(s.e)}</span>${tagEditing && s.k ? "✕ 削除" : esc(s.t)}`;
     b.addEventListener("click", ()=>{
       if(tagEditing){
-        saveTagItems(items.filter(x=>x.k !== s.k));
-        renderTagRow();
+        if(s.k){ saveTagItems(tagItems().filter(x=>x.k !== s.k)); renderOrbit(); }
         return;
       }
       if(mediaRecorder && mediaRecorder.state==="recording") return;
       pendingTagK = s.k;
       recBtn.click();
     });
-    tagRow.append(b);
-  }
-  const ed = document.createElement("button");
-  ed.className = "tag-btn edit-toggle";
-  ed.innerHTML = `<span class="e">✎</span>${tagEditing ? "完了" : "編集"}`;
-  ed.addEventListener("click", ()=>{ tagEditing = !tagEditing; renderTagRow(); });
-  tagRow.append(ed);
-
-  tagEditBox.innerHTML = "";
-  if(tagEditing){
-    const row = document.createElement("div");
-    row.className = "care-add";
-    const inp = document.createElement("input");
-    inp.placeholder = "新しいタグ（例：🌙 夢）";
-    const add = mkBtn("追加", ()=>{
-      const v = inp.value.trim();
-      if(!v) return;
-      const parts = v.split(/\s+/);
-      let e = "🎙️", t = v;
-      if(parts.length > 1 && [...parts[0]].length <= 2 && /[^\w぀-ヿ一-鿿]/u.test(parts[0])){
-        e = parts[0]; t = parts.slice(1).join(" ");
-      }
-      saveTagItems([...tagItems(), {k:"t"+uid(), e, t, form:"steady"}]);
-      renderTagRow();
-    });
-    row.append(inp, add);
-    const row2 = document.createElement("div");
-    row2.className = "care-add";
-    row2.append(mkBtn("標準のタグに戻す", ()=>{ saveTagItems(null); renderTagRow(); }));
-    tagEditBox.append(row, row2);
-  }
+    orbitEl.append(b);
+  });
 }
+
+function renderTagEditBox(){
+  tagEditBox.innerHTML = "";
+  $("#tagEditToggle").textContent = tagEditing ? "✔ 編集を終える" : "✎ タグを編集";
+  if(!tagEditing) return;
+  const row = document.createElement("div");
+  row.className = "care-add";
+  const inp = document.createElement("input");
+  inp.placeholder = "新しいタグ（例：🌙 夢）";
+  const add = mkBtn("追加", ()=>{
+    const v = inp.value.trim();
+    if(!v) return;
+    const parts = v.split(/\s+/);
+    let e = "🎙️", t = v;
+    if(parts.length > 1 && [...parts[0]].length <= 2 && /[^\w぀-ヿ一-鿿]/u.test(parts[0])){
+      e = parts[0]; t = parts.slice(1).join(" ");
+    }
+    saveTagItems([...tagItems(), {k:"t"+uid(), e, t, form:"steady"}]);
+    renderOrbit();
+  });
+  row.append(inp, add);
+  const row2 = document.createElement("div");
+  row2.className = "care-add";
+  row2.append(mkBtn("標準のタグに戻す", ()=>{ saveTagItems(null); renderOrbit(); }));
+  tagEditBox.append(row, row2);
+}
+$("#tagEditToggle").addEventListener("click", ()=>{
+  tagEditing = !tagEditing;
+  renderOrbit();
+  renderTagEditBox();
+});
 
 recBtn.addEventListener("click", async ()=>{
   if(mediaRecorder && mediaRecorder.state==="recording"){ stopRec(); return; }
@@ -935,18 +1000,18 @@ recBtn.addEventListener("click", async ()=>{
     mediaRecorder = new MediaRecorder(stream, {mimeType:mime, audioBitsPerSecond:96000});
     mediaRecorder.ondataavailable = e=>{ if(e.data.size) chunks.push(e.data); };
     mediaRecorder.onstop = ()=>saveRecording(stream, mime);
-    mediaRecorder.start(1000);
+    mediaRecorder.start(); // 分割なしの一括録音（チャンク境界の途切れ対策）
     recStart = Date.now();
     recBtn.classList.add("recording");
-    recBtn.textContent = "⏹";
-    tagRow.style.display = "none";
+    orbitEl.classList.add("rec");
     tagEditBox.style.display = "none";
+    $("#tagEditToggle").style.display = "none";
     const td = pendingTagK ? tagDef(pendingTagK) : null;
     recState.textContent = td
       ? (pendingTagK === "wave"
-          ? "🌊 波ごと、そのまま話して大丈夫 — タップで終了"
-          : `${td.e} ${td.t} — タップで終了`)
-      : "録音中 — もう一度タップで終了";
+          ? "🌊 波ごとどうぞ\nタップで終了"
+          : `${td.e} ${td.t}\nタップで終了`)
+      : "録音中\nタップで終了";
     recTimer = setInterval(()=>{ recTime.textContent = fmtDur((Date.now()-recStart)/1000); }, 250);
 
     audioCtx = new (window.AudioContext||window.webkitAudioContext)();
@@ -960,9 +1025,10 @@ recBtn.addEventListener("click", async ()=>{
     recActive = false;
     if(recRecog){ try{ recRecog.stop(); }catch(e){} }
     liveText.style.display = "none";
-    tagRow.style.display = "";
+    orbitEl.classList.remove("rec");
     tagEditBox.style.display = "";
-    recState.textContent = "マイクを使用できません。権限を確認してください";
+    $("#tagEditToggle").style.display = "";
+    recState.textContent = "マイク使用不可\n権限を確認";
   }
 });
 
@@ -995,7 +1061,6 @@ function stopRec(){
   if(recRecog){ try{ recRecog.stop(); }catch(e){} }
   if(mediaRecorder && mediaRecorder.state==="recording") mediaRecorder.stop();
   recBtn.classList.remove("recording");
-  recBtn.textContent = "🎙️";
 }
 
 async function saveRecording(stream, mime){
@@ -1003,8 +1068,9 @@ async function saveRecording(stream, mime){
   if(audioCtx){ audioCtx.close(); audioCtx = null; }
   const wasTag = pendingTagK;
   pendingTagK = null;
-  tagRow.style.display = "";
+  orbitEl.classList.remove("rec");
   tagEditBox.style.display = "";
+  $("#tagEditToggle").style.display = "";
   const dur = (Date.now()-recStart)/1000;
   if(dur < 0.6){ recState.textContent = "短すぎたため保存しませんでした"; return; }
   const blob = new Blob(chunks, {type:mime});
@@ -1502,13 +1568,42 @@ function voiceBubble(r){
     div.classList.toggle("show-text");
   });
 
-  // 描画（peaks が無ければ遅延計算して保存）
+  // 描画：泡アートを2レイヤー（未再生／再生済み）に一度だけ描き、
+  // 再生中は進捗分をクリップして重ねるだけ（毎フレームのフル再描画を排除＝音の途切れ対策）
   let peaks = r.peaks;
-  const paint = prog => drawPeaks(cv, peaks || fallbackPeaks(r.id), prog,
-    {seed:r.id, tone:r.tone, keywords:r.keywords, form:(td && td.form) || null});
+  const artOpts = {seed:r.id, tone:r.tone, keywords:r.keywords, form:(td && td.form) || null};
+  const paint = prog => {
+    if(!cv._sized){
+      cv.width = (cv.clientWidth || 300) * devicePixelRatio;
+      cv.height = (cv.clientHeight || 58) * devicePixelRatio;
+      cv._sized = true;
+    }
+    if(!cv._layers){
+      const mk = p2 => {
+        const c = document.createElement("canvas");
+        c.width = cv.width; c.height = cv.height; c._sized = true;
+        drawPeaks(c, peaks || fallbackPeaks(r.id), p2, artOpts);
+        return c;
+      };
+      cv._layers = {off: mk(0), on: mk(1)};
+    }
+    const ctx = cv.getContext("2d");
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(cv._layers.off, 0, 0);
+    if(prog > 0){
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, cv.width * Math.min(1, prog), cv.height);
+      ctx.clip();
+      ctx.drawImage(cv._layers.on, 0, 0);
+      ctx.restore();
+    }
+  };
   requestAnimationFrame(()=>paint(0));
   if(!peaks){
-    computePeaks(r.blob).then(p=>{ if(p){ peaks = p; r.peaks = p; put("recordings", r); paint(0); } });
+    computePeaks(r.blob).then(p=>{
+      if(p){ peaks = p; r.peaks = p; put("recordings", r); cv._layers = null; paint(0); }
+    });
   }
 
   // 再生（声紋タップ）— WebMはdurationがInfinityになるChromeのバグがあるため自前のdurで計算
@@ -1525,6 +1620,7 @@ function voiceBubble(r){
     if(playingAudio && !playingAudio.paused){ playingAudio.pause(); }
     if(!myAudio){
       myAudio = new Audio(URL.createObjectURL(r.blob));
+      myAudio.preload = "auto";
       myAudio.onended = ()=>paint(0);
     }
     playingAudio = myAudio;
@@ -1777,9 +1873,17 @@ $("#autoTrChip").addEventListener("click", ()=>{
   localStorage.setItem("koebi.autoTr", autoTrOn() ? "0" : "1");
   renderTrSettings();
 });
+function renderGemCount(){
+  const el = $("#gemCountLabel");
+  if(!el) return;
+  el.innerHTML = getGeminiKey()
+    ? `📊 今日のAI使用回数：<b>${geminiCountToday()}</b> 回（無料枠の目安：1日1,500回・毎日 日本時間の夕方16〜17時ごろリセット）`
+    : "";
+}
 function renderTrSettings(){
   $("#gemKey").value = getGeminiKey();
   $("#autoTrChip").classList.toggle("on", autoTrOn());
+  renderGemCount();
 }
 
 /* ---------- 設定：音声入力の言語 ---------- */
@@ -1813,7 +1917,7 @@ $("#installBtn").addEventListener("click", async ()=>{
   $("#todayLabel").textContent = `${now.getMonth()+1}/${now.getDate()}（${WEEK[now.getDay()]}）`;
   await openDB();
   if(navigator.storage && navigator.storage.persist){ try{ await navigator.storage.persist(); }catch(e){} }
-  renderDumps(); renderCare(); renderSlipGrid(); drawMoodChart(); renderShrimp(); renderLangChips(); renderTrSettings(); renderTagRow();
+  renderDumps(); renderCare(); renderSlipGrid(); drawMoodChart(); renderShrimp(); renderLangChips(); renderTrSettings(); renderOrbit();
   if("serviceWorker" in navigator){
     try{ await navigator.serviceWorker.register("sw.js"); }catch(e){}
   }
